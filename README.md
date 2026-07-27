@@ -224,6 +224,11 @@
 
 2. 使用`docker compose`，参考[WIKI](https://github.com/lejianwen/rustdesk-api/wiki)
 
+3. 如需在同一 Full S6 容器中运行 RustDesk 服务、API 和客户端编译生成器，
+   使用 `full-s6-generator` 镜像及
+   [部署说明](./docs/full-s6-generator.md)。Windows 客户端由 GitHub Actions
+   编译，容器仅运行生成器网页和回调服务。
+
 #### 下载release直接运行
 
 [下载地址](https://github.com/lejianwen/rustdesk-api/releases)

@@ -221,6 +221,11 @@ The table below does not list all configurations. Please refer to the configurat
 
 2. Using `docker-compose`,look [WIKI](https://github.com/lejianwen/rustdesk-api/wiki)
 
+3. To run the RustDesk server, API, and client generator in one Full S6
+   container, use the `full-s6-generator` image and follow the
+   [deployment guide](./docs/full-s6-generator.md). Windows clients are built
+   by GitHub Actions; the container runs only the generator UI and callbacks.
+
 #### Running from Release
 
 Download the release from [release](https://github.com/lejianwen/rustdesk-api/releases).

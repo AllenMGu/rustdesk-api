@@ -27,6 +27,14 @@ on:
         description: 'Web Client API Repository'
         required: true
         default: 'https://github.com/lejianwen/rustdesk-api-web'
+      RDGEN_REPOSITORY:
+        description: 'rdgen Git repository used by full-s6-generator'
+        required: false
+        default: 'https://github.com/AllenMGu/rdgen.git'
+      RDGEN_REF:
+        description: 'rdgen branch, tag, or commit used by full-s6-generator'
+        required: false
+        default: 'master'
   push:
     tags:
       - 'v*.*.*'  # 当推送带有版本号的 tag（例如 v1.0.0）时触发工作流
@@ -40,6 +48,8 @@ env:
   GHCR_IMAGE_NAMESPACE: ${{ github.event.inputs.GHCR_IMAGE_NAMESPACE || github.actor }}
   SKIP_DOCKER_HUB: ${{ github.event.inputs.SKIP_DOCKER_HUB || 'false' }}
   SKIP_GHCR: ${{ github.event.inputs.SKIP_GHCR || 'false' }}
+  RDGEN_REPOSITORY: ${{ github.event.inputs.RDGEN_REPOSITORY || 'https://github.com/AllenMGu/rdgen.git' }}
+  RDGEN_REF: ${{ github.event.inputs.RDGEN_REF || 'master' }}
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -139,6 +149,7 @@ jobs:
             ${{ matrix.job.goos}}-${{ matrix.job.platform }}.${{matrix.job.file_ext}}
 
       - name: Upload to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -220,6 +231,7 @@ jobs:
             debian-build/*.deb
 
       - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -239,6 +251,13 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Normalize container image namespaces
+        shell: bash
+        run: |
+          echo "BASE_IMAGE_NAMESPACE=$(printf '%s' "$BASE_IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "DOCKERHUB_IMAGE_NAMESPACE=$(printf '%s' "$DOCKERHUB_IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "GHCR_IMAGE_NAMESPACE=$(printf '%s' "$GHCR_IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -318,6 +337,23 @@ jobs:
             ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-${{ matrix.job.platform }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Build and push Docker Full S6 Generator image to Docker Hub ${{ matrix.job.platform }}
+        if: ${{ env.SKIP_DOCKER_HUB == 'false' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: "."
+          file: ./Dockerfile_full_s6_generator
+          platforms: ${{ matrix.job.docker_platform }}
+          push: true
+          provenance: false
+          build-args: |
+            BUILDARCH=${{ matrix.job.platform }}
+            RDGEN_REPOSITORY=${{ env.RDGEN_REPOSITORY }}
+            RDGEN_REF=${{ env.RDGEN_REF }}
+          tags: |
+            ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-${{ matrix.job.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+
       - name: Build and push Docker image to GHCR ${{ matrix.job.platform }}
         if: ${{ env.SKIP_GHCR == 'false' }}  # Only run this step if SKIP_GHCR is false
         uses: docker/build-push-action@v5
@@ -339,7 +375,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: "."
-          file: ./Dockerfile
+          file: ./Dockerfile_full_s6
           platforms: ${{ matrix.job.docker_platform }}
           push: true
           provenance: false
@@ -349,12 +385,36 @@ jobs:
             ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-${{ matrix.job.platform }}
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Build and push Docker Full S6 Generator image to GHCR ${{ matrix.job.platform }}
+        if: ${{ env.SKIP_GHCR == 'false' }}
+        uses: docker/build-push-action@v5
+        with:
+          context: "."
+          file: ./Dockerfile_full_s6_generator
+          platforms: ${{ matrix.job.docker_platform }}
+          push: true
+          provenance: false
+          build-args: |
+            BUILDARCH=${{ matrix.job.platform }}
+            RDGEN_REPOSITORY=${{ env.RDGEN_REPOSITORY }}
+            RDGEN_REF=${{ env.RDGEN_REF }}
+          tags: |
+            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-${{ matrix.job.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   #
   docker-manifest:
     name: Push Docker Manifest
     needs: docker
     runs-on: ubuntu-latest
     steps:
+      - name: Normalize container image namespaces
+        shell: bash
+        run: |
+          echo "BASE_IMAGE_NAMESPACE=$(printf '%s' "$BASE_IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "DOCKERHUB_IMAGE_NAMESPACE=$(printf '%s' "$DOCKERHUB_IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "GHCR_IMAGE_NAMESPACE=$(printf '%s' "$GHCR_IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
       - name: Extract version from tag
         id: vars
         run: |
@@ -440,5 +500,27 @@ jobs:
           extra-images: ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-amd64,
             ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-armv7l,
             ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-arm64
+          push: true
+          amend: true
+
+      - name: Create and push Full S6 Generator manifest Docker Hub
+        if: ${{ env.SKIP_DOCKER_HUB == 'false' }}
+        uses: Noelware/docker-manifest-action@v0.2.3
+        with:
+          base-image: ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator
+          extra-images: ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-amd64,
+            ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-armv7l,
+            ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-arm64
+          push: true
+          amend: true
+
+      - name: Create and push Full S6 Generator manifest GHCR
+        if: ${{ env.SKIP_GHCR == 'false' }}
+        uses: Noelware/docker-manifest-action@v0.2.3
+        with:
+          base-image: ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator
+          extra-images: ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-amd64,
+            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-armv7l,
+            ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-arm64
           push: true
           amend: true

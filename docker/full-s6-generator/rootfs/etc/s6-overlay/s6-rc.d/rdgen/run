@@ -1,0 +1,12 @@
+#!/command/with-contenv sh
+set -eu
+
+cd /opt/rdgen
+
+exec /command/s6-setuidgid rdgen /opt/rdgen/.venv/bin/gunicorn \
+  --bind "0.0.0.0:${RDGEN_PORT:-8000}" \
+  --workers "${RDGEN_WORKERS:-2}" \
+  --threads "${RDGEN_THREADS:-4}" \
+  --access-logfile - \
+  --error-logfile - \
+  rdgen.wsgi:application
