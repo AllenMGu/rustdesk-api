@@ -11,7 +11,8 @@ S6 image. A single container runs:
 The container does not compile Windows programs locally. rdgen sends an
 encrypted configuration to GitHub and dispatches the generator workflow in
 `AllenMGu/rdgen`; GitHub-hosted Windows runners compile the selected
-`AllenMGu/rustdesk` source ref.
+`AllenMGu/rustdesk` source ref. When compilation finishes, the runner uploads
+the installer back to rdgen in this S6 container.
 
 ## 1. Configure the rdgen repository
 
@@ -27,6 +28,11 @@ Create a fine-grained GitHub token restricted to `AllenMGu/rdgen`. It must be
 able to dispatch Actions workflows and read workflow runs. Put it only in the
 container environment as `RDGEN_GITHUB_TOKEN`; never commit it.
 
+`RDGEN_UPLOAD_TOKEN` is a separate long random value used only by GitHub
+Actions when it uploads completed clients back to the S6 server. It is carried
+inside the encrypted build input and is not a repository secret or GitHub
+token.
+
 ## 2. Configure and start the container
 
 ```sh
@@ -41,12 +47,32 @@ proxy in front of it and use that public URL for both `RDGEN_PUBLIC_URL` and
 the `GENURL` Actions secret. GitHub runners must be able to fetch encrypted
 inputs and upload completed installers to this URL.
 
+Allow large request bodies at the reverse proxy. For Nginx, the rdgen location
+should include settings similar to:
+
+```nginx
+client_max_body_size 2g;
+proxy_read_timeout 900s;
+proxy_send_timeout 900s;
+```
+
 Persistent state is stored below `./data`:
 
 - `server`: RustDesk server keys and database
 - `api`: RustDesk API data
 - `rdgen/database`: Django SQLite database
-- `rdgen/exe`, `rdgen/png`, and `rdgen/temp-zips`: generated files
+- `rdgen/exe`: completed clients returned by GitHub Actions
+- `rdgen/png` and `rdgen/temp-zips`: build images and temporary encrypted input
+
+Completed files remain on the S6 host at:
+
+```text
+./data/rdgen/exe/<build-uuid>/<generated-file>
+```
+
+Open `<RDGEN_PUBLIC_URL>/artifacts` to list and download all saved
+clients. The files are not automatically deleted and survive container image
+updates because this path is a bind mount.
 
 At startup, the container copies only the server's public
 `/data/id_ed25519.pub` into rdgen's readable data directory. If a JSON preset
@@ -81,6 +107,8 @@ leave `SKIP_GHCR=false`. The resulting image is
 - Do not place GitHub tokens, passwords, private keys, or permanent RustDesk
   passwords in the Dockerfile, compose file, or Git repository.
 - Keep the generator behind authentication or a trusted network boundary.
+- Protect `/artifacts` and `/download` with the same reverse-proxy
+  authentication as the generator UI.
 - Use HTTPS for both the RustDesk API and generator callback URL.
 - For this integrated image, an empty `RS_PUB_KEY` is filled from the local
   server's `id_ed25519.pub`. Standalone rdgen deployments still need either

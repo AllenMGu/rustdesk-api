@@ -87,7 +87,8 @@ ENV RELAY=relay.example.com \
     PROTOCOL=https \
     RUSTDESK_REPOSITORY=rustdesk/rustdesk \
     RUSTDESK_REF= \
-    RUSTDESK_PUBLIC_KEY_FILE=/opt/rdgen/data/server-public-key
+    RUSTDESK_PUBLIC_KEY_FILE=/opt/rdgen/data/server-public-key \
+    ARTIFACT_ROOT=/opt/rdgen/exe
 
 VOLUME ["/data", "/app/data", "/opt/rdgen/data", "/opt/rdgen/exe", "/opt/rdgen/png", "/opt/rdgen/temp_zips"]
 
