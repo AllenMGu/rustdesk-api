@@ -1,0 +1,98 @@
+FROM rustdesk/rustdesk-server-s6:1.1.16 AS server
+
+FROM python:3.13-alpine
+
+ARG BUILDARCH
+ARG RDGEN_REPOSITORY=https://github.com/AllenMGu/rdgen.git
+ARG RDGEN_REF=master
+
+WORKDIR /app
+
+RUN apk add --no-cache --virtual .rdgen-runtime \
+      libffi \
+      libjpeg-turbo \
+      tzdata \
+      zlib \
+    && apk add --no-cache --virtual .rdgen-build-deps \
+      build-base \
+      git \
+      jpeg-dev \
+      libffi-dev \
+      linux-headers \
+      zlib-dev \
+    && git init /opt/rdgen \
+    && git -C /opt/rdgen remote add origin "${RDGEN_REPOSITORY}" \
+    && git -C /opt/rdgen fetch --depth 1 origin "${RDGEN_REF}" \
+    && git -C /opt/rdgen checkout --detach FETCH_HEAD \
+    && python -m venv /opt/rdgen/.venv \
+    && /opt/rdgen/.venv/bin/pip install --no-cache-dir \
+      -r /opt/rdgen/requirements.txt \
+    && rm -rf /opt/rdgen/.git \
+    && apk del .rdgen-build-deps
+
+COPY ./${BUILDARCH}/release /app/
+
+COPY --from=server /init /init
+COPY --from=server /etc/s6-overlay /etc/s6-overlay
+COPY --from=server /package /package
+COPY --from=server /usr/bin/healthcheck.sh /usr/bin/healthcheck.sh
+COPY --from=server /usr/bin/hbbr /usr/bin/hbbr
+COPY --from=server /usr/bin/hbbs /usr/bin/hbbs
+COPY --from=server /usr/bin/rustdesk-utils /usr/bin/rustdesk-utils
+COPY --from=server /command /command
+
+COPY docker/full-s6-generator/rootfs/ /
+
+RUN addgroup -S rdgen \
+    && adduser -S -D -H -h /opt/rdgen -G rdgen rdgen \
+    && mkdir -p \
+      /etc/s6-overlay/s6-rc.d/api \
+      /opt/rdgen/data \
+      /opt/rdgen/exe \
+      /opt/rdgen/png \
+      /opt/rdgen/temp_zips \
+    && printf "key-secret\nhbbs\n" \
+      > /etc/s6-overlay/s6-rc.d/api/dependencies \
+    && printf "longrun\n" > /etc/s6-overlay/s6-rc.d/api/type \
+    && printf '%s\n' \
+      '#!/command/with-contenv sh' \
+      'cd /app' \
+      'exec ./apimain' \
+      > /etc/s6-overlay/s6-rc.d/api/run \
+    && touch /etc/s6-overlay/s6-rc.d/user/contents.d/api \
+    && chmod 755 \
+      /etc/s6-overlay/s6-rc.d/api/run \
+      /etc/s6-overlay/s6-rc.d/rdgen/run \
+      /etc/s6-overlay/s6-rc.d/rdgen-prepare/up \
+    && chown -R rdgen:rdgen \
+      /opt/rdgen/data \
+      /opt/rdgen/exe \
+      /opt/rdgen/png \
+      /opt/rdgen/temp_zips \
+    && printf '%s\n' \
+      '/package/admin/s6/command/s6-svstat /run/s6-rc/servicedirs/api || exit 1' \
+      '/package/admin/s6/command/s6-svstat /run/s6-rc/servicedirs/rdgen || exit 1' \
+      >> /usr/bin/healthcheck.sh \
+    && ln -s /run /var/run
+
+ENV RELAY=relay.example.com \
+    ENCRYPTED_ONLY=0 \
+    PYTHONUNBUFFERED=1 \
+    DATABASE_PATH=/opt/rdgen/data/db.sqlite3 \
+    RDGEN_PORT=8000 \
+    RDGEN_WORKERS=2 \
+    RDGEN_THREADS=4 \
+    GHBRANCH=master \
+    REPONAME=rdgen \
+    PROTOCOL=https \
+    RUSTDESK_REPOSITORY=rustdesk/rustdesk \
+    RUSTDESK_REF= \
+    RUSTDESK_PUBLIC_KEY_FILE=/opt/rdgen/data/server-public-key
+
+VOLUME ["/data", "/app/data", "/opt/rdgen/data", "/opt/rdgen/exe", "/opt/rdgen/png", "/opt/rdgen/temp_zips"]
+
+EXPOSE 8000 21114 21115 21116 21116/udp 21117 21118 21119
+
+HEALTHCHECK --interval=30s --timeout=5s CMD /usr/bin/healthcheck.sh
+
+ENTRYPOINT ["/init"]
