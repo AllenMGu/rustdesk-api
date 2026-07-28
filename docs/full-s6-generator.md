@@ -49,8 +49,10 @@ docker compose --env-file .env \
   -f docker-compose.full-s6-generator.yaml up -d
 ```
 
-The compose file also works with rootful Podman after a compose provider such
-as `podman-compose` is installed:
+The compose file uses host networking so RustDesk's published ports do not
+depend on Podman bridge forwarding or a dynamically assigned container IP. It
+also works with rootful Podman after a compose provider such as
+`podman-compose` is installed:
 
 ```sh
 podman-compose -f docker-compose.full-s6-generator.yaml up -d
@@ -60,8 +62,16 @@ Its bind mounts use the SELinux private relabel option (`:Z`), allowing the
 RustDesk server, API SQLite database, and rdgen to write to their persistent
 directories on enforcing Podman hosts.
 
-The compose example binds the internal rdgen service to `127.0.0.1:8000`.
-Put an HTTPS reverse proxy in front of RustDesk API on port `21114`. Use the
+Because host networking bypasses Compose port publishing, ensure ports
+`21114-21119/tcp` and `21116/udp` are allowed by the host firewall. Keep port
+`8000/tcp` closed to remote clients; RustDesk API reaches rdgen through
+`127.0.0.1:8000` inside the shared network namespace.
+
+The compose example sets `RDGEN_BIND_HOST=127.0.0.1`, so the internal rdgen
+service remains available only to processes on this host even though the
+container shares the host network namespace. Do not change this to `0.0.0.0`
+unless port `8000` is protected separately. Put an HTTPS reverse proxy in
+front of RustDesk API on port `21114`. Use the
 same public site plus `/rdgen` for both `RDGEN_PUBLIC_URL` and the `GENURL`
 Actions secret, for example:
 
@@ -157,7 +167,8 @@ leave `SKIP_GHCR=false`. The resulting image is
   passwords in the Dockerfile, compose file, or Git repository.
 - Generator creation, artifact listing, and downloads require an authenticated
   RustDesk API Web administrator.
-- Do not publish port `8000`; the compose file binds it to localhost only.
+- Keep `RDGEN_BIND_HOST=127.0.0.1`; port `8000` is an internal service and
+  must not be exposed to remote clients.
 - Use HTTPS for both the RustDesk API and generator callback URL.
 - For this integrated image, an empty `RS_PUB_KEY` is filled from the local
   server's `id_ed25519.pub`. Standalone rdgen deployments still need either
