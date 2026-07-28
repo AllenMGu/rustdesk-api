@@ -19,6 +19,9 @@ func Init(g *gin.Engine) {
 		g.GET("/admin/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.InstanceName("admin")))
 	}
 
+	rdgen := &admin.Rdgen{}
+	g.Any("/rdgen/*path", rdgen.PublicProxy)
+
 	adg := g.Group("/api/admin")
 	LoginBind(adg)
 	adg.POST("/user/register", (&admin.User{}).Register)
@@ -50,8 +53,14 @@ func Init(g *gin.Engine) {
 
 	RustdeskCmdBind(adg)
 	DeviceGroupBind(adg)
+	RdgenBind(adg)
 	//访问静态文件
 	//g.StaticFS("/upload", http.Dir(global.Config.Gin.ResourcesPath+"/upload"))
+}
+
+func RdgenBind(adg *gin.RouterGroup) {
+	cont := &admin.Rdgen{}
+	adg.Any("/rdgen/*path", middleware.AdminPrivilege(), cont.AdminProxy)
 }
 
 func RustdeskCmdBind(adg *gin.RouterGroup) {
