@@ -3,6 +3,7 @@ services:
     image: ghcr.io/allenmgu/rustdesk-api:full-s6-generator
     container_name: rustdesk-full-s6-generator
     restart: unless-stopped
+    network_mode: host
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       RELAY: ${RUSTDESK_HOST:?Set RUSTDESK_HOST}:21117
@@ -31,19 +32,10 @@ services:
       RUSTDESK_PUBLIC_KEY_FILE: /opt/rdgen/data/server-public-key
       RDGEN_WORKERS: ${RDGEN_WORKERS:-2}
       RDGEN_THREADS: ${RDGEN_THREADS:-4}
+      RDGEN_BIND_HOST: 127.0.0.1
       RDGEN_INTERNAL_URL: http://127.0.0.1:8000
       RDGEN_CLIENT_DEFAULTS_FILE: /app/data/rdgen-client-defaults.json
       DEFAULT_PERMANENT_PASSWORD: ${RDGEN_DEFAULT_PERMANENT_PASSWORD:-}
-    ports:
-      - "21114:21114"
-      - "21115:21115"
-      - "21116:21116"
-      - "21116:21116/udp"
-      - "21117:21117"
-      - "21118:21118"
-      - "21119:21119"
-      # Diagnostic access only. Users open the merged API Web UI on port 21114.
-      - "127.0.0.1:${RDGEN_PORT:-8000}:8000"
     volumes:
       - ./data/server:/data:Z
       - ./data/api:/app/data:Z
