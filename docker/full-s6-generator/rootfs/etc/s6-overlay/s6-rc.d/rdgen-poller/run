@@ -1,0 +1,7 @@
+#!/command/with-contenv sh
+set -eu
+
+cd /opt/rdgen
+
+exec /command/s6-setuidgid rdgen \
+  /opt/rdgen/.venv/bin/python manage.py poll_github_artifacts
