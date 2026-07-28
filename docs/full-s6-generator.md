@@ -15,27 +15,30 @@ downloads all use the existing API Web login. Port `8000` is bound to localhost
 only for diagnostics and is not a user-facing frontend.
 
 The container does not compile Windows programs locally. rdgen sends an
-encrypted configuration to GitHub as an unreferenced Git blob and dispatches
-the generator workflow in `AllenMGu/rdgen`; GitHub-hosted Windows runners
-compile the selected `AllenMGu/rustdesk` source ref and upload the EXE/MSI as a
-GitHub Actions Artifact. The S6 `rdgen-poller` service checks the workflow
-state and actively downloads the matching artifact into the container.
+encrypted configuration to GitHub and dispatches the generator workflow in
+`AllenMGu/rdgen`; GitHub-hosted Windows runners compile the selected
+`AllenMGu/rustdesk` source ref. When compilation finishes, the runner uploads
+the installer back to rdgen in this S6 container.
 
 ## 1. Configure the rdgen repository
 
-Add this Actions repository secret to `AllenMGu/rdgen`:
+Add these Actions repository secrets to `AllenMGu/rdgen`:
 
 - `ZIP_PASSWORD`: the same value as `RDGEN_ZIP_PASSWORD`
+- `GENURL`: the same HTTPS callback prefix as `RDGEN_PUBLIC_URL`, including
+  the `/rdgen` suffix
 
 Optional signing secrets used by the existing workflows can be configured
 separately.
 
 Create a fine-grained GitHub token restricted to `AllenMGu/rdgen`. It must be
-configured with repository permissions `Actions: read and write` and
-`Contents: read and write`. These permissions allow S6 to create the encrypted
-input blob, dispatch the workflow, query its state, and download its Artifact.
-Put the token only in the container environment as `RDGEN_GITHUB_TOKEN`; never
-commit it.
+able to dispatch Actions workflows and read workflow runs. Put it only in the
+container environment as `RDGEN_GITHUB_TOKEN`; never commit it.
+
+`RDGEN_UPLOAD_TOKEN` is a separate long random value used only by GitHub
+Actions when it uploads completed clients back to the S6 server. It is carried
+inside the encrypted build input and is not a repository secret or GitHub
+token.
 
 ## 2. Configure and start the container
 
@@ -67,21 +70,36 @@ Because host networking bypasses Compose port publishing, ensure ports
 The compose example sets `RDGEN_BIND_HOST=127.0.0.1`, so the internal rdgen
 service remains available only to processes on this host even though the
 container shares the host network namespace. Do not change this to `0.0.0.0`
-unless port `8000` is protected separately.
+unless port `8000` is protected separately. Put an HTTPS reverse proxy in
+front of RustDesk API on port `21114`. Use the
+same public site plus `/rdgen` for both `RDGEN_PUBLIC_URL` and the `GENURL`
+Actions secret, for example:
 
-No public IP, public DNS, reverse proxy, inbound NAT, `GENURL` Actions secret,
-or GitHub-to-S6 callback is required for client generation. The S6 server only
-needs outbound HTTPS access to `api.github.com` and the GitHub Artifact
-download URL. `RDGEN_PUBLIC_URL` is optional and is used only to form display
-links; an internal value such as
-`http://rustdesk.internal.example:21114/rdgen` is valid.
+```text
+API Web:           https://rustdesk.example.com
+RDGEN_PUBLIC_URL:  https://rustdesk.example.com/rdgen
+```
+
+GitHub runners must be able to reach the `/rdgen` callback prefix to fetch
+encrypted inputs and upload completed installers. The Go API exposes only the
+specific callback routes needed by the workflows; generator administration
+and downloads remain protected by the existing API Web administrator login.
+
+Allow large request bodies at the reverse proxy. For Nginx, the rdgen location
+should include settings similar to:
+
+```nginx
+client_max_body_size 2g;
+proxy_read_timeout 900s;
+proxy_send_timeout 900s;
+```
 
 Persistent state is stored below `./data`:
 
 - `server`: RustDesk server keys and database
 - `api`: RustDesk API data
 - `rdgen/database`: Django SQLite database
-- `rdgen/exe`: completed clients actively downloaded from GitHub Actions
+- `rdgen/exe`: completed clients returned by GitHub Actions
 - `rdgen/png` and `rdgen/temp-zips`: build images and temporary encrypted input
 
 Deployment-specific client defaults are also stored on the host rather than
@@ -110,11 +128,6 @@ Completed files remain on the S6 host at:
 ```text
 ./data/rdgen/exe/<build-uuid>/<generated-file>
 ```
-
-The `rdgen-poller` S6 service checks active runs every
-`RDGEN_GITHUB_POLL_INTERVAL` seconds (default `60`). It downloads only the
-`rdgen-<build-uuid>` Artifact belonging to the recorded workflow run and saves
-only `.exe` and `.msi` files.
 
 Open RustDesk API Web and select `系统管理 -> 客户端生成器` to list and
 download all saved clients. The files are not automatically deleted and
@@ -156,7 +169,7 @@ leave `SKIP_GHCR=false`. The resulting image is
   RustDesk API Web administrator.
 - Keep `RDGEN_BIND_HOST=127.0.0.1`; port `8000` is an internal service and
   must not be exposed to remote clients.
-- Keep `RDGEN_GITHUB_TOKEN` out of images, repositories, and logs.
+- Use HTTPS for both the RustDesk API and generator callback URL.
 - For this integrated image, an empty `RS_PUB_KEY` is filled from the local
   server's `id_ed25519.pub`. Standalone rdgen deployments still need either
   that field or `RUSTDESK_PUBLIC_KEY_FILE`.

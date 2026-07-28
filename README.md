@@ -224,10 +224,52 @@
 
 2. 使用`docker compose`，参考[WIKI](https://github.com/lejianwen/rustdesk-api/wiki)
 
-3. 如需在同一 Full S6 容器中运行 RustDesk 服务、API 和客户端编译生成器，
-   使用 `full-s6-generator` 镜像及
-   [部署说明](./docs/full-s6-generator.md)。Windows 客户端由 GitHub Actions
-   编译，容器仅运行生成器网页和回调服务。
+3. 如需在同一 Full S6 容器中运行 RustDesk 服务、API 和 Windows 客户端生成器，
+   使用 `full-s6-generator` 镜像：
+
+   ```bash
+   cp .env.full-s6-generator.example .env
+   # 编辑 .env 后启动
+   podman-compose -f docker-compose.full-s6-generator.yaml up -d
+   ```
+
+   客户端生成流程：
+
+   1. S6 服务器将加密配置上传为 GitHub Git blob，并触发
+      `AllenMGu/rdgen` 的 GitHub Actions。
+   2. GitHub Actions 编译 Windows EXE/MSI，并上传名为
+      `rdgen-<构建UUID>` 的 Artifact。
+   3. S6 中的 `rdgen-poller` 服务默认每 60 秒查询一次运行状态。
+   4. 编译成功后，S6 主动下载对应 Artifact，并保存到：
+
+      ```text
+      ./data/rdgen/exe/<构建UUID>/<生成文件>
+      ```
+
+   此流程不需要公网 IP、入站 NAT、GitHub 回调地址或 Windows
+   self-hosted runner；S6 服务器只需能够主动访问 GitHub HTTPS。
+
+   `AllenMGu/rdgen` 仓库只需配置 Actions Secret：
+
+   - `ZIP_PASSWORD`：与 `.env` 中的 `RDGEN_ZIP_PASSWORD` 相同。
+
+   `RDGEN_GITHUB_TOKEN` 使用仅限 `AllenMGu/rdgen` 的 fine-grained token，
+   仓库权限设置为：
+
+   - `Actions: Read and write`
+   - `Contents: Read and write`
+
+   常用环境变量：
+
+   | 变量 | 说明 | 默认值 |
+   |---|---|---|
+   | `RDGEN_GITHUB_TOKEN` | 触发、查询并下载 GitHub Actions Artifact | 必填 |
+   | `RDGEN_ZIP_PASSWORD` | 加密客户端构建配置 | 必填 |
+   | `RDGEN_GITHUB_POLL_INTERVAL` | S6 查询构建状态的间隔（秒） | `60` |
+   | `RDGEN_PUBLIC_URL` | 可选，仅用于生成页面显示链接 | 空 |
+
+   `data/rdgen/exe` 使用宿主机 bind mount，更新容器镜像后生成的
+   EXE/MSI 文件仍会保留。
 
 #### 下载release直接运行
 
