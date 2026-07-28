@@ -7,6 +7,7 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
       RELAY: ${RUSTDESK_HOST:?Set RUSTDESK_HOST}:21117
       ENCRYPTED_ONLY: ${ENCRYPTED_ONLY:-0}
+      MUST_LOGIN: ${MUST_LOGIN:-N}
 
       RUSTDESK_API_LANG: ${RUSTDESK_API_LANG:-zh-CN}
       RUSTDESK_API_RUSTDESK_ID_SERVER: ${RUSTDESK_HOST}:21116
@@ -41,9 +42,9 @@ services:
       # Publish rdgen through an HTTPS reverse proxy on this host.
       - "127.0.0.1:${RDGEN_PORT:-8000}:8000"
     volumes:
-      - ./data/server:/data
-      - ./data/api:/app/data
-      - ./data/rdgen/database:/opt/rdgen/data
-      - ./data/rdgen/exe:/opt/rdgen/exe
-      - ./data/rdgen/png:/opt/rdgen/png
-      - ./data/rdgen/temp-zips:/opt/rdgen/temp_zips
+      - ./data/server:/data:Z
+      - ./data/api:/app/data:Z
+      - ./data/rdgen/database:/opt/rdgen/data:Z
+      - ./data/rdgen/exe:/opt/rdgen/exe:Z
+      - ./data/rdgen/png:/opt/rdgen/png:Z
+      - ./data/rdgen/temp-zips:/opt/rdgen/temp_zips:Z
