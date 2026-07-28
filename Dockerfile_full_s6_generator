@@ -1,5 +1,35 @@
 FROM rustdesk/rustdesk-server-s6:1.1.16 AS server
 
+FROM --platform=$BUILDPLATFORM node:20-alpine AS web
+
+ARG WEBCLIENT_REPOSITORY=https://github.com/lejianwen/rustdesk-api-web.git
+ARG WEBCLIENT_REF=master
+
+RUN apk add --no-cache git \
+    && git init /opt/rustdesk-api-web \
+    && git -C /opt/rustdesk-api-web remote add origin "${WEBCLIENT_REPOSITORY}" \
+    && git -C /opt/rustdesk-api-web fetch --depth 1 origin "${WEBCLIENT_REF}" \
+    && git -C /opt/rustdesk-api-web checkout --detach FETCH_HEAD
+
+COPY docker/full-s6-generator/web-overrides/ /tmp/web-overrides/
+
+RUN mkdir -p \
+      /opt/rustdesk-api-web/src/api \
+      /opt/rustdesk-api-web/src/views/rdgen \
+    && cp /tmp/web-overrides/src/api/rdgen.js \
+      /opt/rustdesk-api-web/src/api/rdgen.js \
+    && cp /tmp/web-overrides/src/views/rdgen/index.vue \
+      /opt/rustdesk-api-web/src/views/rdgen/index.vue \
+    && node /tmp/web-overrides/patch-router.mjs \
+      /opt/rustdesk-api-web/src/router/index.js \
+    && cd /opt/rustdesk-api-web \
+    && npm ci \
+      --registry=https://registry.npmjs.org \
+      --replace-registry-host=always \
+      --no-audit \
+      --no-fund \
+    && npm run build
+
 FROM python:3.13-alpine
 
 ARG BUILDARCH
@@ -31,6 +61,8 @@ RUN apk add --no-cache --virtual .rdgen-runtime \
     && apk del .rdgen-build-deps
 
 COPY ./${BUILDARCH}/release /app/
+RUN rm -rf /app/resources/admin
+COPY --from=web /opt/rustdesk-api-web/dist /app/resources/admin
 
 COPY --from=server /init /init
 COPY --from=server /etc/s6-overlay /etc/s6-overlay
@@ -88,6 +120,9 @@ ENV RELAY=relay.example.com \
     RUSTDESK_REPOSITORY=rustdesk/rustdesk \
     RUSTDESK_REF= \
     RUSTDESK_PUBLIC_KEY_FILE=/opt/rdgen/data/server-public-key \
+    RDGEN_INTERNAL_URL=http://127.0.0.1:8000 \
+    RDGEN_CLIENT_DEFAULTS_FILE=/app/data/rdgen-client-defaults.json \
+    DEFAULT_PERMANENT_PASSWORD= \
     ARTIFACT_ROOT=/opt/rdgen/exe
 
 VOLUME ["/data", "/app/data", "/opt/rdgen/data", "/opt/rdgen/exe", "/opt/rdgen/png", "/opt/rdgen/temp_zips"]
