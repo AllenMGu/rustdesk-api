@@ -95,6 +95,7 @@ RUN addgroup -S rdgen \
     && chmod 755 \
       /etc/s6-overlay/s6-rc.d/api/run \
       /etc/s6-overlay/s6-rc.d/rdgen/run \
+      /etc/s6-overlay/s6-rc.d/rdgen-poller/run \
       /etc/s6-overlay/s6-rc.d/rdgen-prepare/run \
     && chown -R rdgen:rdgen \
       /opt/rdgen/data \
@@ -104,6 +105,7 @@ RUN addgroup -S rdgen \
     && printf '%s\n' \
       '/package/admin/s6/command/s6-svstat /run/s6-rc/servicedirs/api || exit 1' \
       '/package/admin/s6/command/s6-svstat /run/s6-rc/servicedirs/rdgen || exit 1' \
+      '/package/admin/s6/command/s6-svstat /run/s6-rc/servicedirs/rdgen-poller || exit 1' \
       >> /usr/bin/healthcheck.sh \
     && ln -s /run /var/run
 
@@ -123,6 +125,7 @@ ENV RELAY=relay.example.com \
     RDGEN_INTERNAL_URL=http://127.0.0.1:8000 \
     RDGEN_CLIENT_DEFAULTS_FILE=/app/data/rdgen-client-defaults.json \
     DEFAULT_PERMANENT_PASSWORD= \
+    GITHUB_POLL_INTERVAL=60 \
     ARTIFACT_ROOT=/opt/rdgen/exe
 
 VOLUME ["/data", "/app/data", "/opt/rdgen/data", "/opt/rdgen/exe", "/opt/rdgen/png", "/opt/rdgen/temp_zips"]
