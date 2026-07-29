@@ -176,7 +176,7 @@
 | RUSTDESK_API_ADMIN_HELLO                               | 后台欢迎语，可以使用`html`                                                               |                              |
 | RUSTDESK_API_ADMIN_HELLO_FILE                          | 后台欢迎语文件，如果内容多，使用文件更方便。<br>会覆盖`RUSTDESK_API_ADMIN_HELLO`                        | `./conf/admin/hello.html`    |
 | -----GIN配置-----                                        | ----------                                                                     | ----------                   |
-| RUSTDESK_API_GIN_TRUST_PROXY                           | 信任的代理IP列表，以`,`分割，默认信任所有                                                        | 192.168.1.2,192.168.1.3      |
+| RUSTDESK_API_GIN_TRUST_PROXY                           | 信任的代理IP列表，以`,`分割，默认信任所有                                                        | `<trusted-proxy-ip-list>`     |
 | -----GORM配置-----                                       | ----------                                                                     | ---------------------------  |
 | RUSTDESK_API_GORM_TYPE                                 | 数据库类型sqlite或者mysql，默认sqlite                                                    | sqlite                       |
 | RUSTDESK_API_GORM_MAX_IDLE_CONNS                       | 数据库最大空闲连接数                                                                     | 10                           |
@@ -184,18 +184,18 @@
 | RUSTDESK_API_RUSTDESK_PERSONAL                         | 是否启用个人版API， 1:启用,0:不启用； 默认启用                                                   | 1                            |
 | -----MYSQL配置-----                                      | ----------                                                                     | ----------                   |
 | RUSTDESK_API_MYSQL_USERNAME                            | mysql用户名                                                                       | root                         |
-| RUSTDESK_API_MYSQL_PASSWORD                            | mysql密码                                                                        | 111111                       |
-| RUSTDESK_API_MYSQL_ADDR                                | mysql地址                                                                        | 192.168.1.66:3306            |
+| RUSTDESK_API_MYSQL_PASSWORD                            | mysql密码                                                                        | `<mysql-password>`            |
+| RUSTDESK_API_MYSQL_ADDR                                | mysql地址                                                                        | mysql.example.com:3306        |
 | RUSTDESK_API_MYSQL_DBNAME                              | mysql数据库名                                                                      | rustdesk                     |
 | RUSTDESK_API_MYSQL_TLS                             | 是否启用TLS, 可选值: `true`, `false`, `skip-verify`, `custom` | `false`                      |
 | -----RUSTDESK配置-----                                   | ----------                                                                     | ----------                   |
-| RUSTDESK_API_RUSTDESK_ID_SERVER                        | Rustdesk的id服务器地址                                                               | 192.168.1.66:21116           |
-| RUSTDESK_API_RUSTDESK_RELAY_SERVER                     | Rustdesk的relay服务器地址                                                            | 192.168.1.66:21117           |
-| RUSTDESK_API_RUSTDESK_API_SERVER                       | Rustdesk的api服务器地址                                                              | http://192.168.1.66:21114    |
-| RUSTDESK_API_RUSTDESK_KEY                              | Rustdesk的key                                                                   | 123456789                    |
+| RUSTDESK_API_RUSTDESK_ID_SERVER                        | Rustdesk的id服务器地址                                                               | rustdesk.example.com:21116    |
+| RUSTDESK_API_RUSTDESK_RELAY_SERVER                     | Rustdesk的relay服务器地址                                                            | rustdesk.example.com:21117    |
+| RUSTDESK_API_RUSTDESK_API_SERVER                       | Rustdesk的api服务器地址                                                              | https://rustdesk.example.com  |
+| RUSTDESK_API_RUSTDESK_KEY                              | Rustdesk的key                                                                   | `<rustdesk-public-key>`       |
 | RUSTDESK_API_RUSTDESK_KEY_FILE                         | Rustdesk存放key的文件                                                               | `./conf/data/id_ed25519.pub` |
 | RUSTDESK_API_RUSTDESK_WEBCLIENT<br/>_MAGIC_QUERYONLINE | Web client v2 中是否启用新的在线状态查询方法; `1`:启用,`0`:不启用,默认不启用                            | `0`                          |
-| RUSTDESK_API_RUSTDESK_WS_HOST                          | 自定义Websocket Host                                                              | `wss://192.168.1.123:1234`   |
+| RUSTDESK_API_RUSTDESK_WS_HOST                          | 自定义Websocket Host                                                              | `wss://rustdesk.example.com`  |
 | ----PROXY配置-----                                       | ----------                                                                     | ----------                   |
 | RUSTDESK_API_PROXY_ENABLE                              | 是否启用代理:`false`, `true`                                                         | `false`                      |
 | RUSTDESK_API_PROXY_HOST                                | 代理地址                                                                           | `http://127.0.0.1:1080`      |
@@ -215,9 +215,9 @@
     -v /data/rustdesk/api:/app/data \
     -e TZ=Asia/Shanghai \
     -e RUSTDESK_API_LANG=zh-CN \
-    -e RUSTDESK_API_RUSTDESK_ID_SERVER=192.168.1.66:21116 \
-    -e RUSTDESK_API_RUSTDESK_RELAY_SERVER=192.168.1.66:21117 \
-    -e RUSTDESK_API_RUSTDESK_API_SERVER=http://192.168.1.66:21114 \
+    -e RUSTDESK_API_RUSTDESK_ID_SERVER=rustdesk.example.com:21116 \
+    -e RUSTDESK_API_RUSTDESK_RELAY_SERVER=rustdesk.example.com:21117 \
+    -e RUSTDESK_API_RUSTDESK_API_SERVER=https://rustdesk.example.com \
     -e RUSTDESK_API_RUSTDESK_KEY=<key> \
     lejianwen/rustdesk-api
     ```
@@ -245,6 +245,9 @@
       ```text
       ./data/rdgen/exe/<构建UUID>/<生成文件>
       ```
+   5. S6 只有在验证所需 EXE/MSI 均已完整保存后，才会删除该次
+      GitHub Actions 运行的全部 Artifact。下载失败会保留 GitHub
+      Artifact，供下一轮查询重试。
 
    此流程不需要公网 IP、入站 NAT、GitHub 回调地址或 Windows
    self-hosted runner；S6 服务器只需能够主动访问 GitHub HTTPS。
@@ -266,10 +269,12 @@
    | `RDGEN_GITHUB_TOKEN` | 触发、查询并下载 GitHub Actions Artifact | 必填 |
    | `RDGEN_ZIP_PASSWORD` | 加密客户端构建配置 | 必填 |
    | `RDGEN_GITHUB_POLL_INTERVAL` | S6 查询构建状态的间隔（秒） | `60` |
+   | `RDGEN_GITHUB_BUILD_TIMEOUT` | 单个任务允许查询的最长时间（秒） | `21600` |
    | `RDGEN_PUBLIC_URL` | 可选，仅用于生成页面显示链接 | 空 |
 
    `data/rdgen/exe` 使用宿主机 bind mount，更新容器镜像后生成的
-   EXE/MSI 文件仍会保留。
+   EXE/MSI 文件仍会保留。管理员可在“客户端生成器”页面删除某个任务
+   的整组安装包；此操作只删除 S6 服务器本地文件。
 
 #### 下载release直接运行
 
@@ -350,7 +355,7 @@
        - RUSTDESK_API_RUSTDESK_RELAY_SERVER=<relay_server[:21117]>
        - RUSTDESK_API_RUSTDESK_API_SERVER=http://<api_server[:21114]>
        - RUSTDESK_API_KEY_FILE=/data/id_ed25519.pub
-       - RUSTDESK_API_JWT_KEY=xxxxxx # jwt key
+       - RUSTDESK_API_JWT_KEY=<jwt-key> # jwt key
      volumes:
        - /data/rustdesk/server:/data
        - /data/rustdesk/api:/app/data #将数据库挂载

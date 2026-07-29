@@ -19,9 +19,6 @@ func Init(g *gin.Engine) {
 		g.GET("/admin/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.InstanceName("admin")))
 	}
 
-	rdgen := &admin.Rdgen{}
-	g.Any("/rdgen/*path", rdgen.PublicProxy)
-
 	adg := g.Group("/api/admin")
 	LoginBind(adg)
 	adg.POST("/user/register", (&admin.User{}).Register)
