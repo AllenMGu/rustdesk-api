@@ -15,18 +15,9 @@ import (
 const defaultRdgenInternalURL = "http://127.0.0.1:8000"
 const defaultRdgenClientDefaultsFile = "/app/data/rdgen-client-defaults.json"
 
-var rdgenPublicRoutes = map[string]struct{}{
-	"GET get_zip":             {},
-	"GET get_png":             {},
-	"POST updategh":           {},
-	"POST save_custom_client": {},
-	"POST cleanzip":           {},
-}
-
 // Rdgen securely exposes the co-located client generator through rustdesk-api.
-// Administrative endpoints are protected by the existing backend login and
-// administrator middleware. Only the callback endpoints needed by GitHub
-// Actions are available without a backend login.
+// Every endpoint is protected by the existing backend login and administrator
+// middleware. GitHub Actions never connects back to this service.
 type Rdgen struct{}
 
 func serveRdgenClientDefaults(c *gin.Context) {
@@ -116,17 +107,8 @@ func (ct *Rdgen) AdminProxy(c *gin.Context) {
 	case c.Request.Method == http.MethodGet && path == "check_for_file":
 	case c.Request.Method == http.MethodGet && path == "artifacts":
 	case c.Request.Method == http.MethodGet && path == "download":
+	case c.Request.Method == http.MethodDelete && path == "delete_artifact_build":
 	default:
-		c.JSON(http.StatusNotFound, gin.H{"error": "Unknown generator endpoint"})
-		return
-	}
-	proxyRdgen(c, path)
-}
-
-func (ct *Rdgen) PublicProxy(c *gin.Context) {
-	path := strings.TrimLeft(c.Param("path"), "/")
-	key := c.Request.Method + " " + path
-	if _, allowed := rdgenPublicRoutes[key]; !allowed {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Unknown generator endpoint"})
 		return
 	}

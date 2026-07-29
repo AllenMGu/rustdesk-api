@@ -7,6 +7,7 @@ exec /command/s6-setuidgid rdgen /opt/rdgen/.venv/bin/gunicorn \
   --bind "${RDGEN_BIND_HOST:-0.0.0.0}:${RDGEN_PORT:-8000}" \
   --workers "${RDGEN_WORKERS:-2}" \
   --threads "${RDGEN_THREADS:-4}" \
+  --no-control-socket \
   --access-logfile - \
   --error-logfile - \
   rdgen.wsgi:application

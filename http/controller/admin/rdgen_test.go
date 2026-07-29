@@ -80,41 +80,41 @@ func TestRdgenAdminProxyRejectsUnknownRoute(t *testing.T) {
 	}
 }
 
-func TestRdgenPublicProxyAllowsWorkflowCallbackOnly(t *testing.T) {
+func TestRdgenAdminProxyAllowsArtifactDeletion(t *testing.T) {
+	var receivedMethod string
 	var receivedPath string
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedMethod = r.Method
 		receivedPath = r.URL.Path
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusNoContent)
 	}))
 	defer backend.Close()
 	t.Setenv("RDGEN_INTERNAL_URL", backend.URL)
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.Any("/rdgen/*path", (&Rdgen{}).PublicProxy)
+	router.Any("/api/admin/rdgen/*path", (&Rdgen{}).AdminProxy)
 	proxyServer := httptest.NewServer(router)
 	defer proxyServer.Close()
 
-	allowed, err := http.Post(
-		proxyServer.URL+"/rdgen/save_custom_client",
-		"application/octet-stream",
+	request, err := http.NewRequest(
+		http.MethodDelete,
+		proxyServer.URL+"/api/admin/rdgen/delete_artifact_build?uuid=6b5d395f-2478-4ca9-8383-34c0057deab8",
 		nil,
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer allowed.Body.Close()
-	if allowed.StatusCode != http.StatusCreated || receivedPath != "/save_custom_client" {
-		t.Fatalf("allowed callback was not proxied: status=%d path=%q", allowed.StatusCode, receivedPath)
-	}
-
-	rejected, err := http.Get(proxyServer.URL + "/rdgen/artifacts")
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rejected.Body.Close()
-	if rejected.StatusCode != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rejected.StatusCode)
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("expected status %d, got %d", http.StatusNoContent, response.StatusCode)
+	}
+	if receivedMethod != http.MethodDelete || receivedPath != "/delete_artifact_build" {
+		t.Fatalf("artifact deletion was not proxied: method=%s path=%q", receivedMethod, receivedPath)
 	}
 }
 

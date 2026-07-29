@@ -33,9 +33,6 @@
               <el-select v-model="form.platform">
                 <el-option label="Windows 64 位" value="windows"/>
                 <el-option label="Windows 32 位" value="windows-x86"/>
-                <el-option label="Linux" value="linux"/>
-                <el-option label="Android" value="android"/>
-                <el-option label="macOS" value="macos"/>
               </el-select>
             </el-form-item>
           </el-col>
@@ -68,11 +65,6 @@
           <el-col :xs="24" :md="8">
             <el-form-item label="公司名称">
               <el-input v-model="form.compname"/>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="8">
-            <el-form-item label="Android App ID">
-              <el-input v-model="form.androidappid" placeholder="Android 构建时填写"/>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="8">
@@ -297,6 +289,13 @@
       >
         查看 GitHub Actions 日志
       </el-link>
+      <el-alert
+        v-if="currentBuild.last_error"
+        class="build-error"
+        type="error"
+        :closable="false"
+        :title="currentBuild.last_error"
+      />
     </el-card>
 
     <el-card shadow="never" class="artifacts-card">
@@ -312,9 +311,10 @@
         <el-table-column label="大小" width="120">
           <template #default="{ row }">{{ formatBytes(row.size) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="180">
           <template #default="{ row }">
             <el-button link type="primary" @click="download(row)">下载</el-button>
+            <el-button link type="danger" @click="removeBuild(row)">删除整组</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -324,9 +324,10 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   createBuild,
+  deleteArtifactBuild,
   downloadArtifact,
   getArtifacts,
   getBuildStatus,
@@ -502,13 +503,13 @@ const imageOptions = [
 
 const configInput = ref()
 const creating = ref(false)
-const currentBuild = reactive({ uuid: '', status: '', log_url: '' })
+const currentBuild = reactive({ uuid: '', status: '', log_url: '', last_error: '' })
 const artifacts = ref([])
 let pollTimer
 
 const statusType = computed(() => {
   if (currentBuild.status === 'success') return 'success'
-  if (['failure', 'cancelled', 'timed_out'].includes(currentBuild.status)) return 'danger'
+  if (['failure', 'cancelled', 'timed_out', 'skipped', 'action_required', 'neutral', 'stale'].includes(currentBuild.status)) return 'danger'
   return 'warning'
 })
 
@@ -527,7 +528,7 @@ async function submitBuild() {
   creating.value = true
   try {
     const response = await createBuild({ ...form })
-    Object.assign(currentBuild, response.data)
+    Object.assign(currentBuild, { last_error: '', ...response.data })
     ElMessage.success('编译任务已提交')
     startPolling()
   } catch (error) {
@@ -552,11 +553,13 @@ async function pollBuild() {
       platform: form.platform,
     })
     Object.assign(currentBuild, response.data)
-    if (['success', 'failure', 'cancelled', 'timed_out', 'skipped', 'action_required'].includes(currentBuild.status)) {
+    if (['success', 'failure', 'cancelled', 'timed_out', 'skipped', 'action_required', 'neutral', 'stale'].includes(currentBuild.status)) {
       clearInterval(pollTimer)
       if (currentBuild.status === 'success') {
         ElMessage.success('客户端编译完成')
         refreshArtifacts()
+      } else {
+        ElMessage.error(currentBuild.last_error || `编译结束：${currentBuild.status}`)
       }
     }
   } catch (error) {
@@ -603,6 +606,26 @@ async function download(row) {
     anchor.click()
     setTimeout(() => URL.revokeObjectURL(url), 0)
   } catch (error) {
+    ElMessage.error(errorMessage(error))
+  }
+}
+
+async function removeBuild(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确认删除任务 ${row.uuid} 的全部 EXE/MSI 文件？`,
+      '删除服务器安装包',
+      {
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+    await deleteArtifactBuild({ uuid: row.uuid })
+    ElMessage.success('服务器安装包已删除')
+    await refreshArtifacts()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
     ElMessage.error(errorMessage(error))
   }
 }
@@ -721,6 +744,10 @@ onBeforeUnmount(() => clearInterval(pollTimer))
 }
 
 .build-card .el-link {
+  margin-top: 12px;
+}
+
+.build-error {
   margin-top: 12px;
 }
 
