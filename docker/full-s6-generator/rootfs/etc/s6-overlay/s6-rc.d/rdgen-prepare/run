@@ -2,10 +2,17 @@
 set -eu
 
 for variable_name in SECRET_KEY GHUSER GHBEARER ZIP_PASSWORD; do
-  if [ -z "$(printenv "${variable_name}" 2>/dev/null)" ]; then
+  variable_value="$(printenv "${variable_name}" 2>/dev/null || true)"
+  if [ -z "${variable_value}" ]; then
     echo "rdgen: required environment variable ${variable_name} is empty" >&2
     exit 1
   fi
+  case "${variable_value}" in
+    replace-with-*)
+      echo "rdgen: replace the example value for ${variable_name}" >&2
+      exit 1
+      ;;
+  esac
 done
 
 mkdir -p \
