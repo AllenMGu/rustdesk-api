@@ -229,7 +229,8 @@
 
    ```bash
    cp .env.full-s6-generator.example .env
-   # 编辑 .env 后启动
+   # 编辑 .env，并限制其中 GitHub Token 和密码的读取权限
+   chmod 600 .env
    podman-compose -f docker-compose.full-s6-generator.yaml up -d
    ```
 
@@ -266,15 +267,34 @@
 
    | 变量 | 说明 | 默认值 |
    |---|---|---|
+   | `TZ` | 容器时区 | `Asia/Shanghai` |
+   | `RUSTDESK_HOST` | 客户端可访问的服务器主机名或 IP，不含协议和端口 | 必填 |
+   | `RUSTDESK_API_PUBLIC_URL` | 浏览器访问 API 的完整 HTTP(S) URL | 必填 |
+   | `RUSTDESK_API_LANG` | API Web 界面语言：`zh-CN` 或 `en` | `zh-CN` |
+   | `ENCRYPTED_ONLY` | RustDesk 服务是否只接受加密连接 | `0` |
+   | `MUST_LOGIN` | RustDesk 客户端是否必须登录后使用 | `N` |
+   | `RDGEN_SECRET_KEY` | Django 服务随机密钥，可用 `openssl rand -hex 32` 生成 | 必填 |
+   | `RDGEN_GITHUB_USER` | rdgen 仓库所有者 | `AllenMGu` |
+   | `RDGEN_GITHUB_REPOSITORY` | rdgen 仓库名称，不含所有者 | `rdgen` |
+   | `RDGEN_GITHUB_BRANCH` | 触发工作流的 rdgen 分支 | `master` |
    | `RDGEN_GITHUB_TOKEN` | 触发、查询并下载 GitHub Actions Artifact | 必填 |
    | `RDGEN_ZIP_PASSWORD` | 加密客户端构建配置 | 必填 |
    | `RDGEN_GITHUB_POLL_INTERVAL` | S6 查询构建状态的间隔（秒） | `60` |
    | `RDGEN_GITHUB_BUILD_TIMEOUT` | 单个任务允许查询的最长时间（秒） | `21600` |
-   | `RDGEN_PUBLIC_URL` | 可选，仅用于生成页面显示链接 | 空 |
+   | `RDGEN_WORKERS` | 内部生成器 Gunicorn worker 数量 | `2` |
+   | `RDGEN_THREADS` | 每个 worker 的线程数 | `4` |
+   | `RDGEN_DEFAULT_PERMANENT_PASSWORD` | 页面未填写永久密码时嵌入客户端的默认密码 | 空 |
+   | `RUSTDESK_SOURCE_REPOSITORY` | 编译使用的 RustDesk 源码仓库（所有者/仓库） | `AllenMGu/rustdesk` |
+   | `RUSTDESK_SOURCE_REF` | 固定源码分支、标签或提交；非空时覆盖页面版本选择 | `master` |
 
    `data/rdgen/exe` 使用宿主机 bind mount，更新容器镜像后生成的
    EXE/MSI 文件仍会保留。管理员可在“客户端生成器”页面删除某个任务
    的整组安装包；此操作只删除 S6 服务器本地文件。
+
+   若希望页面的 RustDesk 版本选择直接切换官方标签，请设置
+   `RUSTDESK_SOURCE_REPOSITORY=rustdesk/rustdesk`，并将
+   `RUSTDESK_SOURCE_REF` 留空。使用自定义仓库或固定提交时，应明确设置
+   `RUSTDESK_SOURCE_REF`；此时每次编译都会检出同一个源码 ref。
 
 #### 下载release直接运行
 

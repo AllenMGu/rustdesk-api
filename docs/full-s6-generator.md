@@ -45,9 +45,40 @@ inbound NAT rule, or `RDGEN_UPLOAD_TOKEN` is required by this flow.
 ```sh
 cp .env.full-s6-generator.example .env
 # Edit .env before continuing.
+chmod 600 .env
 docker compose --env-file .env \
   -f docker-compose.full-s6-generator.yaml up -d
 ```
+
+The relevant variables are:
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `TZ` | Container timezone | `Asia/Shanghai` |
+| `RUSTDESK_HOST` | Hostname or IP reachable by clients, without a scheme or port | required |
+| `RUSTDESK_API_PUBLIC_URL` | Full browser-facing HTTP(S) API URL | required |
+| `RUSTDESK_API_LANG` | API Web language: `zh-CN` or `en` | `zh-CN` |
+| `ENCRYPTED_ONLY` | Whether the RustDesk server accepts only encrypted connections | `0` |
+| `MUST_LOGIN` | Whether RustDesk clients must log in before use | `N` |
+| `RDGEN_SECRET_KEY` | Unique Django secret; generate with `openssl rand -hex 32` | required |
+| `RDGEN_GITHUB_USER` | Owner of the rdgen repository | `AllenMGu` |
+| `RDGEN_GITHUB_REPOSITORY` | rdgen repository name without the owner | `rdgen` |
+| `RDGEN_GITHUB_BRANCH` | rdgen branch containing the dispatched workflows | `master` |
+| `RDGEN_GITHUB_TOKEN` | Dispatches runs and reads/deletes Actions Artifacts | required |
+| `RDGEN_ZIP_PASSWORD` | Encrypts build inputs; must match the Actions `ZIP_PASSWORD` secret | required |
+| `RDGEN_GITHUB_POLL_INTERVAL` | Polling interval in seconds | `60` |
+| `RDGEN_GITHUB_BUILD_TIMEOUT` | Maximum polling lifetime in seconds | `21600` |
+| `RDGEN_WORKERS` | Internal generator Gunicorn worker count | `2` |
+| `RDGEN_THREADS` | Threads per Gunicorn worker | `4` |
+| `RDGEN_DEFAULT_PERMANENT_PASSWORD` | Used only when the form password is empty | empty |
+| `RUSTDESK_SOURCE_REPOSITORY` | RustDesk source repository in `owner/repository` form | `AllenMGu/rustdesk` |
+| `RUSTDESK_SOURCE_REF` | Fixed source branch, tag, or commit | `master` |
+
+A non-empty `RUSTDESK_SOURCE_REF` fixes the source checkout for every build
+and therefore overrides the source ref implied by the page's version selector.
+To build the selected official RustDesk tag instead, set
+`RUSTDESK_SOURCE_REPOSITORY=rustdesk/rustdesk` and leave
+`RUSTDESK_SOURCE_REF` empty.
 
 The compose file uses host networking so RustDesk's published ports do not
 depend on Podman bridge forwarding or a dynamically assigned container IP. It
@@ -153,8 +184,8 @@ leave `SKIP_GHCR=false`. The resulting image is
 
 - Do not place GitHub tokens, passwords, private keys, or permanent RustDesk
   passwords in the Dockerfile, compose file, or Git repository.
-- Generator creation, artifact listing, and downloads require an authenticated
-  RustDesk API Web administrator.
+- Generator creation, artifact listing, downloads, and local deletion require
+  an authenticated RustDesk API Web administrator.
 - Keep `RDGEN_BIND_HOST=127.0.0.1`; port `8000` is an internal service and
   must not be exposed to remote clients.
 - Use HTTPS for RustDesk API Web. No generator callback URL is exposed.
