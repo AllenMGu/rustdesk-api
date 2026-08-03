@@ -84,11 +84,22 @@ jobs:
       - name: tidy
         run: go mod tidy
 
-      - name: Get tag version
+      - name: Get build version
+        shell: bash
         run: |
-          TAG_VERSION="${GITHUB_REF##*/}"
-          VERSION="${TAG_VERSION#v}" 
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            SAFE_REF="$(printf '%s' "$GITHUB_REF_NAME" | sed -E 's/[^A-Za-z0-9.+~-]+/./g')"
+            VERSION="0.0.0~${SAFE_REF}.${GITHUB_RUN_NUMBER}"
+          else
+            VERSION="0.0.0+run.${GITHUB_RUN_NUMBER}.${GITHUB_SHA::7}"
+          fi
+          dpkg --validate-version "$VERSION"
+          {
+            echo "TAG_VERSION=${GITHUB_REF_NAME}"
+            echo "VERSION=$VERSION"
+          } >> "$GITHUB_ENV"
 
       - name: Write version to resources/version
         run:  echo $VERSION > resources/version
@@ -167,10 +178,10 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Create packaging env
         run: |
@@ -178,13 +189,22 @@ jobs:
           DEBIAN_FRONTEND=noninteractive sudo apt install -y devscripts build-essential debhelper pkg-config ${{ matrix.job.crossbuild_package }}
           mkdir -p debian-build/${{ matrix.job.platform }}/bin
 
-      - name: Get tag version
-        id: get_tag
+      - name: Get build version
+        shell: bash
         run: |
-          TAG_VERSION="${GITHUB_REF##*/}"
-          VERSION="${TAG_VERSION#v}" 
-          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            SAFE_REF="$(printf '%s' "$GITHUB_REF_NAME" | sed -E 's/[^A-Za-z0-9.+~-]+/./g')"
+            VERSION="0.0.0~${SAFE_REF}.${GITHUB_RUN_NUMBER}"
+          else
+            VERSION="0.0.0+run.${GITHUB_RUN_NUMBER}.${GITHUB_SHA::7}"
+          fi
+          dpkg --validate-version "$VERSION"
+          {
+            echo "TAG_VERSION=${GITHUB_REF_NAME}"
+            echo "VERSION=$VERSION"
+          } >> "$GITHUB_ENV"
 
       - name: Update changelog
         run: |
@@ -250,7 +270,7 @@ jobs:
           echo "GHCR_IMAGE_NAMESPACE=$(printf '%s' "$GHCR_IMAGE_NAMESPACE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
