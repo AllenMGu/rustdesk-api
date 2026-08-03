@@ -53,6 +53,10 @@ desktop software that provides self-hosted solutions.
     - Visitors are remotely to the device via a temporary sharing link
 - CLI
     - Reset admin password
+- Integrated RDGen
+    - Authenticated Windows client generator in the API administration UI
+    - Django source and GitHub Actions workflows stored in this repository
+    - Outbound-only GitHub Artifact download flow; no separate RDGen repository
 
 ## Overview
 

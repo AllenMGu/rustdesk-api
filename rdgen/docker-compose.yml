@@ -1,0 +1,33 @@
+services:
+  rdgen:
+    build: .
+    image: rustdesk-api-rdgen:local
+    restart: unless-stopped
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY}
+      GHUSER: ${GHUSER:?Set GHUSER}
+      GHBEARER: ${GHBEARER:?Set GHBEARER}
+      GENURL: ${GENURL:-}
+      ZIP_PASSWORD: ${ZIP_PASSWORD:?Set ZIP_PASSWORD}
+      GHBRANCH: ${GHBRANCH:-master}
+      PROTOCOL: ${PROTOCOL:-https}
+      REPONAME: ${REPONAME:-rustdesk-api}
+      RUSTDESK_REPOSITORY: ${RUSTDESK_REPOSITORY:-rustdesk/rustdesk}
+      RUSTDESK_REF: ${RUSTDESK_REF:-}
+      RUSTDESK_PUBLIC_KEY_FILE: ${RUSTDESK_PUBLIC_KEY_FILE:-}
+      UPLOAD_TOKEN: ${UPLOAD_TOKEN:-}
+      RDGEN_INTERNAL_TOKEN: ${RDGEN_INTERNAL_TOKEN:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]}
+      DATABASE_PATH: /opt/rdgen/data/db.sqlite3
+      ARTIFACT_ROOT: /opt/rdgen/exe
+      GITHUB_POLL_INTERVAL: ${GITHUB_POLL_INTERVAL:-60}
+      SH_SECRET: ${SH_SECRET:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    dns:
+      - 8.8.8.8
+    volumes:
+      - ./data:/opt/rdgen/data
+      - ./exe:/opt/rdgen/exe
+      - ./png:/opt/rdgen/png
+      - ./temp_zips:/opt/rdgen/temp_zips

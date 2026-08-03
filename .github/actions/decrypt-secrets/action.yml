@@ -1,0 +1,87 @@
+name: 'Decrypt and Mask Secrets'
+description: 'Decrypts a zip and masks the JSON contents as env vars'
+inputs:
+  zip_password:
+    description: 'Password for the Zip'
+    required: true
+  zip_path:
+    description: 'Path to the encrypted zip'
+    required: false
+    default: 'secrets.zip'
+
+runs:
+  using: "composite"
+  steps:
+    - name: install python deps
+      shell: bash
+      run: |
+        pip install --disable-pip-version-check --no-input pyzipper==0.4.0
+    - name: Decrypt, validate, and mask
+      shell: python
+      env:
+        RDGEN_ZIP_PATH: ${{ inputs.zip_path }}
+        RDGEN_ZIP_PASSWORD: ${{ inputs.zip_password }}
+      run: |
+        import json
+        import os
+        import re
+        import uuid
+
+        import pyzipper
+
+        MAX_CONFIG_BYTES = 2 * 1024 * 1024
+        MAX_ASSET_BYTES = 8 * 1024 * 1024
+        ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+        zip_path = os.environ["RDGEN_ZIP_PATH"]
+        zip_password = os.environ["RDGEN_ZIP_PASSWORD"].encode()
+
+        with pyzipper.AESZipFile(zip_path) as zf:
+            zf.setpassword(zip_password)
+            config_info = zf.getinfo("secrets.json")
+            if config_info.file_size > MAX_CONFIG_BYTES:
+                raise ValueError("Encrypted build configuration is too large")
+            with zf.open(config_info) as config_file:
+                config = json.load(config_file)
+            if not isinstance(config, dict):
+                raise ValueError("Encrypted build configuration must be an object")
+
+            for asset in ("icon.png", "logo.png", "privacy.png"):
+                member = f"assets/{asset}"
+                if member not in zf.namelist():
+                    continue
+                asset_info = zf.getinfo(member)
+                if asset_info.file_size > MAX_ASSET_BYTES:
+                    raise ValueError(f"{asset} is too large")
+                os.makedirs("assets", exist_ok=True)
+                with zf.open(asset_info) as source, open(member, "wb") as target:
+                    target.write(source.read())
+
+        def workflow_escape(value):
+            return (
+                value.replace("%", "%25")
+                .replace("\r", "%0D")
+                .replace("\n", "%0A")
+            )
+
+        with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+            for key, value in config.items():
+                if not isinstance(key, str) or not ENV_NAME.fullmatch(key):
+                    raise ValueError(f"Invalid environment variable name: {key!r}")
+                if value in (None, ""):
+                    continue
+                if not isinstance(value, (str, int, float, bool)):
+                    raise ValueError(f"Invalid value type for {key}")
+                text = str(value)
+                if "\x00" in text or len(text.encode("utf-8")) > MAX_CONFIG_BYTES:
+                    raise ValueError(f"Invalid value for {key}")
+
+                print(f"::add-mask::{workflow_escape(text)}")
+                delimiter = f"RDGEN_{uuid.uuid4().hex}"
+                while delimiter in text:
+                    delimiter = f"RDGEN_{uuid.uuid4().hex}"
+                env_file.write(
+                    f"{key}<<{delimiter}\n{text}\n{delimiter}\n"
+                )
+
+        print(f"Successfully validated and masked {len(config)} values.")

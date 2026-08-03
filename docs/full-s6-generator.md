@@ -1,9 +1,10 @@
 # Full S6 image with RustDesk client generator
 
-`Dockerfile_full_s6_generator` adds the
-[AllenMGu/rdgen](https://github.com/AllenMGu/rdgen) generator to RustDesk API
-Web. It is a single authenticated administration interface, not two separate
-websites. A single container runs:
+`Dockerfile_full_s6_generator` builds the generator source stored in this
+repository's `rdgen/` directory into RustDesk API Web. RDGen is no longer
+cloned from or dispatched through a separate repository. It is a single
+authenticated administration interface, not two separate websites. A single
+container runs:
 
 - `hbbs` and `hbbr`
 - RustDesk API on port `21114`
@@ -16,22 +17,22 @@ only for diagnostics and is not a user-facing frontend.
 
 The container does not compile Windows programs locally. rdgen sends an
 encrypted configuration to GitHub and dispatches the generator workflow in
-`AllenMGu/rdgen`; GitHub-hosted Windows runners compile the selected
+`AllenMGu/rustdesk-api`; GitHub-hosted Windows runners compile the selected
 `AllenMGu/rustdesk` source ref. When compilation finishes, the runner uploads
 the EXE/MSI to GitHub Actions Artifacts. The S6 poller queries the run, downloads
 the files to local persistent storage, verifies the complete output set, and
 then deletes all Artifacts belonging to that run.
 
-## 1. Configure the rdgen repository
+## 1. Configure the rustdesk-api repository
 
-Add these Actions repository secrets to `AllenMGu/rdgen`:
+Add these Actions repository secrets to `AllenMGu/rustdesk-api`:
 
 - `ZIP_PASSWORD`: the same value as `RDGEN_ZIP_PASSWORD`
 
 Optional signing secrets used by the existing workflows can be configured
 separately.
 
-Create a fine-grained GitHub token restricted to `AllenMGu/rdgen`. It must be
+Create a fine-grained GitHub token restricted to `AllenMGu/rustdesk-api`. It must be
 configured with repository `Actions: Read and write` and
 `Contents: Read and write`. The contents permission is required because S6
 uploads the encrypted input as an unreferenced Git blob. Put the token only in
@@ -61,9 +62,10 @@ The relevant variables are:
 | `ENCRYPTED_ONLY` | Whether the RustDesk server accepts only encrypted connections | `0` |
 | `MUST_LOGIN` | Whether RustDesk clients must log in before use | `N` |
 | `RDGEN_SECRET_KEY` | Unique Django secret; generate with `openssl rand -hex 32` | required |
-| `RDGEN_GITHUB_USER` | Owner of the rdgen repository | `AllenMGu` |
-| `RDGEN_GITHUB_REPOSITORY` | rdgen repository name without the owner | `rdgen` |
-| `RDGEN_GITHUB_BRANCH` | rdgen branch containing the dispatched workflows | `master` |
+| `RDGEN_INTERNAL_TOKEN` | Authenticates the API proxy to the internal RDGen service | required |
+| `RDGEN_GITHUB_USER` | Owner of this repository | `AllenMGu` |
+| `RDGEN_GITHUB_REPOSITORY` | Repository containing API and RDGen | `rustdesk-api` |
+| `RDGEN_GITHUB_BRANCH` | Branch containing the dispatched RDGen workflows | `master` |
 | `RDGEN_GITHUB_TOKEN` | Dispatches runs and reads/deletes Actions Artifacts | required |
 | `RDGEN_ZIP_PASSWORD` | Encrypts build inputs; must match the Actions `ZIP_PASSWORD` secret | required |
 | `RDGEN_GITHUB_POLL_INTERVAL` | Polling interval in seconds | `60` |
@@ -166,16 +168,14 @@ The release workflow publishes the multi-architecture tag
 ```sh
 docker build \
   --build-arg BUILDARCH=amd64 \
-  --build-arg RDGEN_REPOSITORY=https://github.com/AllenMGu/rdgen.git \
-  --build-arg RDGEN_REF=master \
   -f Dockerfile_full_s6_generator \
   -t rustdesk-api:full-s6-generator .
 ```
 
-Use a full rdgen commit SHA for `RDGEN_REF` when a reproducible build is
-required.
+The image always embeds the `rdgen/` source from the same checked-out API
+commit, so an API commit SHA now identifies both components reproducibly.
 
-After both repository changes are merged, run the `Build` workflow manually.
+After the single-repository change is merged, run the `Build` workflow manually.
 If Docker Hub credentials are not configured, set `SKIP_DOCKER_HUB=true` and
 leave `SKIP_GHCR=false`. The resulting image is
 `ghcr.io/allenmgu/rustdesk-api:full-s6-generator`.

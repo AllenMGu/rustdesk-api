@@ -33,10 +33,10 @@ RUN mkdir -p \
 FROM python:3.13-alpine
 
 ARG BUILDARCH
-ARG RDGEN_REPOSITORY=https://github.com/AllenMGu/rdgen.git
-ARG RDGEN_REF=master
 
 WORKDIR /app
+
+COPY rdgen/ /opt/rdgen/
 
 RUN apk add --no-cache --virtual .rdgen-runtime \
       libffi \
@@ -45,19 +45,13 @@ RUN apk add --no-cache --virtual .rdgen-runtime \
       zlib \
     && apk add --no-cache --virtual .rdgen-build-deps \
       build-base \
-      git \
       jpeg-dev \
       libffi-dev \
       linux-headers \
       zlib-dev \
-    && git init /opt/rdgen \
-    && git -C /opt/rdgen remote add origin "${RDGEN_REPOSITORY}" \
-    && git -C /opt/rdgen fetch --depth 1 origin "${RDGEN_REF}" \
-    && git -C /opt/rdgen checkout --detach FETCH_HEAD \
     && python -m venv /opt/rdgen/.venv \
     && /opt/rdgen/.venv/bin/pip install --no-cache-dir \
       -r /opt/rdgen/requirements.txt \
-    && rm -rf /opt/rdgen/.git \
     && apk del .rdgen-build-deps
 
 COPY ./${BUILDARCH}/release /app/
@@ -117,7 +111,7 @@ ENV RELAY=relay.example.com \
     RDGEN_WORKERS=2 \
     RDGEN_THREADS=4 \
     GHBRANCH=master \
-    REPONAME=rdgen \
+    REPONAME=rustdesk-api \
     PROTOCOL=https \
     RUSTDESK_REPOSITORY=rustdesk/rustdesk \
     RUSTDESK_REF= \
