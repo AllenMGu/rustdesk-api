@@ -1,408 +1,513 @@
-# RustDesk API
+# RustDesk Full S6 + API + RDGEN
 
-[English Doc](README_EN.md)
+[English](README_EN.md) · [Full S6 部署文档](docs/full-s6-generator.md) · [问题反馈](https://github.com/AllenMGu/rustdesk-api/issues)
 
-本项目使用 Go 实现了 RustDesk 的 API，并包含了 Web Admin 和 Web 客户端。
+[![Build](https://github.com/AllenMGu/rustdesk-api/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/AllenMGu/rustdesk-api/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/API-MIT-blue.svg)](LICENSE)
+[![RDGEN License](https://img.shields.io/badge/RDGEN-GPL--3.0-blue.svg)](rdgen/LICENSE)
 
+这是一个面向自托管场景的 RustDesk 一体化仓库。`full-s6-generator`
+镜像在同一个 S6 容器中运行 RustDesk Server、RustDesk API、Web 管理后台和
+RDGEN 客户端生成器，并通过 GitHub Actions 生成 Windows、Linux、Android
+与 macOS 客户端。
 
-<div align=center>
-<img src="https://img.shields.io/badge/golang-1.22-blue"/>
-<img src="https://img.shields.io/badge/gin-v1.9.0-lightBlue"/>
-<img src="https://img.shields.io/badge/gorm-v1.25.7-green"/>
-<img src="https://img.shields.io/badge/swag-v1.16.3-yellow"/>
-<img src="https://goreportcard.com/badge/github.com/lejianwen/rustdesk-api/v2"/>
-<img src="https://github.com/lejianwen/rustdesk-api/actions/workflows/build.yml/badge.svg"/>
-</div>
+> **来源声明：本项目的 Full S6 容器与服务编排基于 [lejianwen/rustdesk-server](https://github.com/lejianwen/rustdesk-server/tree/forapi) 的 S6-overlay 方案，原始镜像为 [`lejianwen/rustdesk-server-s6`](https://hub.docker.com/r/lejianwen/rustdesk-server-s6)。**  
+> API 核心来源于
+> [lejianwen/rustdesk-api](https://github.com/lejianwen/rustdesk-api)，客户端生成器来源于
+> [bryangerlach/rdgen](https://github.com/bryangerlach/rdgen)。本仓库在这些项目基础上完成了
+> Full S6 整合、RDGEN 单仓化、安全加固、多平台 GitHub Actions 构建和
+> Artifact 主动拉取。它不是 RustDesk 官方项目。
 
-## 搭配[lejianwen/rustdesk-server]使用更佳。
-> [lejianwen/rustdesk-server]fork自RustDesk Server官方仓库
-> 1. 解决了使用API链接超时问题
-> 2. 可以强制登录后才能发起链接
-> 3. 支持客户端websocket
+## 项目组成
 
+| 组件 | 作用 | 运行方式 |
+|---|---|---|
+| `hbbs` | RustDesk ID/信令服务 | S6 服务 |
+| `hbbr` | RustDesk 中继服务 | S6 服务 |
+| RustDesk API | 登录、地址簿、设备、审计、LDAP/OAuth 等 API | S6 服务，端口 `21114` |
+| Web Admin / Web Client | 管理后台和浏览器远程入口 | 由 API 提供 |
+| RDGEN | 客户端参数配置、任务管理、安装包下载 | 内部 S6 服务，仅监听 `127.0.0.1:8000` |
+| `rdgen-poller` | 查询 Actions、下载并验证 Artifact | S6 后台服务 |
+| GitHub Actions | 编译各平台 RustDesk 客户端 | GitHub 托管 Runner |
 
+```mermaid
+flowchart TD
+    Admin["管理员浏览器"] --> API["API Web :21114"]
+    Client["RustDesk 客户端"] --> Server["hbbs / hbbr"]
+    API --> RDGEN["RDGEN :8000，仅本机"]
+    RDGEN --> Actions["GitHub Actions"]
+    Poller["S6 rdgen-poller"] --> Actions
+    Poller --> Files["data/rdgen/exe"]
+```
 
-# 特性
+## 主要功能
 
-- PC端API
-    - 个人版API
-    - 登录
-    - 地址簿
-    - 群组
-    - 授权登录
-      - 支持`github`, `google` 和 `OIDC` 登录，
-      - 支持`web后台`授权登录
-      - 支持`LDAP`(AD和OpenLDAP已测试), 如果API Server配置了LDAP
-    - i18n
-- Web Admin
-    - 用户管理
-    - 设备管理
-    - 地址簿管理
-    - 标签管理
-    - 群组管理
-    - Oauth 管理
-    - 配置LDAP, 配置文件或者环境变量
-    - 登录日志
-    - 链接日志
-    - 文件传输日志
-    - 快速使用web client
-    - i18n
-    - 通过 web client 分享给游客
-    - server控制(一些官方的简单的指令 [WIKI](https://github.com/lejianwen/rustdesk-api/wiki/Rustdesk-Command))
-- Web Client
-    - 自动获取API server
-    - 自动获取ID服务器和KEY
-    - 自动获取地址簿
-    - 游客通过临时分享链接直接远程到设备
-- CLI
-    - 重置管理员密码
+### RustDesk API 与管理后台
 
-## 功能
+- RustDesk 客户端登录、个人地址簿、共享地址簿、群组和标签。
+- 用户、设备、地址簿、群组和 OAuth 管理。
+- 登录日志、连接日志和文件传输日志。
+- LDAP 登录，已用于 Active Directory 和 OpenLDAP 场景；LDAP 验证失败时可回退到本地用户。
+- GitHub、Google 和通用 OIDC 登录。
+- Web Client 自动获取 API、ID Server、Relay Server、公钥和地址簿。
+- 管理员临时分享 Web Client 连接。
+- Swagger API 文档和服务器命令管理。
+- CLI 重置管理员密码。
 
+### 集成客户端生成器
 
-### API 服务 
-基本实现了PC端基础的接口。支持Personal版本接口，可以通过配置文件`rustdesk.personal`或环境变量`RUSTDESK_API_RUSTDESK_PERSONAL`来控制是否启用
+- 生成器已经合并到本仓库的 `rdgen/`，不再依赖单独的 `AllenMGu/rdgen` 仓库。
+- 生成入口位于 API 管理后台的 `系统管理 → 客户端生成器`。
+- 生成任务、状态、安装包下载和删除均复用 API 管理员登录。
+- 构建配置加密后以 Git blob 传入 Actions，不通过 URL 或 Shell 环境直接拼接敏感表单内容。
+- GitHub Actions 不回连 S6；服务器主动查询、下载和验证 Artifact。
+- 无需 `GENURL`、公网回调地址、入站 NAT 或 self-hosted runner。
+- 支持配置自定义服务器、API 地址、公钥、应用名称、公司名称、文件名、图标、Logo 和永久密码等参数。
 
-<table>
-    <tr>
-      <td width="50%" align="center" colspan="2"><b>登录</b></td>
-    </tr>
-    <tr>
-        <td width="50%" align="center" colspan="2"><img src="docs/pc_login.png"></td>
-    </tr>
-     <tr>
-      <td width="50%" align="center"><b>地址簿</b></td>
-      <td width="50%" align="center"><b>群组</b></td>
-    </tr>
-    <tr>
-        <td width="50%" align="center"><img src="docs/pc_ab.png"></td>
-        <td width="50%" align="center"><img src="docs/pc_gr.png"></td>
-    </tr>
-</table>
+## 支持的客户端
 
-### Web Admin:
+| 平台 | 架构 | 主要产物 |
+|---|---|---|
+| Windows | x86_64、x86 | EXE、MSI |
+| Android | aarch64、armv7、x86_64 | APK |
+| Linux | x86_64 等工作流支持的架构 | DEB、RPM、SUSE RPM、AppImage、Flatpak |
+| macOS | Intel x86_64、Apple Silicon aarch64 | DMG |
 
-* 使用前后端分离，提供用户友好的管理界面，主要用来管理和展示。前端代码在[rustdesk-api-web](https://github.com/lejianwen/rustdesk-api-web)
+实际产物取决于所选 RustDesk 源码版本、目标架构和对应工作流。Windows、Android 与 macOS 的正式发布包如需消除系统签名警告，应另外配置代码签名凭据。
 
-* 后台访问地址是`http://<your server>[:port]/_admin/`
-* 初次安装管理员为用户名为`admin`，密码将在控制台打印，可以通过[命令行](#CLI)更改密码
+## Full S6 部署
 
-  ![img.png](./docs/init_admin_pwd.png)
+以下方式会部署完整的 Server + API + RDGEN。若只需要 API，请参阅[仅运行 API](#仅运行-api)。
 
-1. 管理员界面
-   ![web_admin](docs/web_admin.png)
-2. 普通用户界面
-   ![web_user](docs/web_admin_user.png)
+### 1. 准备条件
 
-3. 每个用户可以多个地址簿，也可以将地址簿共享给其他用户
-4. 分组可以自定义，方便管理，暂时支持两种类型: `共享组` 和 `普通组`
-5. 可以直接打开webclient，方便使用；也可以分享给游客，游客可以直接通过webclient远程到设备
-6. Oauth,支持了`Github`, `Google` 以及 `OIDC`, 需要创建一个`OAuth App`，然后配置到后台
-    - 对于`Google` 和 `Github`, `Issuer` 和 `Scopes`不需要填写.
-    - 对于`OIDC`, `Issuer`是必须的。`Scopes`是可选的，默认为 `openid,profile,email`. 确保可以获取 `sub`,`email` 和`preferred_username`
-    - `github oauth app`在`Settings`->`Developer settings`->`OAuth Apps`->`New OAuth App`
-      中创建,地址 [https://github.com/settings/developers](https://github.com/settings/developers)
-    - `Authorization callback URL`填写`http://<your server[:port]>/api/oidc/callback`
-      ，比如`http://127.0.0.1:21114/api/oidc/callback`
-7. 登录日志
-8. 链接日志
-9. 文件传输日志
-10. server控制
+- Linux 服务器，已安装 Docker Compose，或 rootful Podman + `podman-compose`。
+- S6 服务器能够主动访问 GitHub HTTPS、GitHub API 和 Actions Artifact 下载地址。
+- RustDesk 客户端能够访问 `RUSTDESK_HOST` 对应的服务器端口。
+- `AllenMGu/rustdesk-api` 仓库可使用 GitHub Actions。
 
-  - `简易模式`,已经界面化了一些简单的指令，可以直接在后台执行
-    ![rustdesk_command_simple](./docs/rustdesk_command_simple.png)
+> RDGEN 构建本身不要求服务器具有公网 IP。若要让公网 RustDesk 客户端连接你的自建服务器，仍需按实际网络环境配置公网地址、端口映射、防火墙或 VPN。
 
-  - `高级模式`,直接在后台执行指令
-      * 可以官方指令
-      * 可以添加自定义指令
-      * 可以执行自定义指令
+### 2. 配置 GitHub
 
- 
-11. **LDAP 支持**, 当在API Server上设置了LDAP(已测试AD和LDAP),可以通过LDAP中的用户信息进行登录 https://github.com/lejianwen/rustdesk-api/issues/114 ,如果LDAP验证失败，返回本地用户
+在 `AllenMGu/rustdesk-api` 的 **Settings → Secrets and variables → Actions** 中创建：
 
-### Web Client:
+```text
+ZIP_PASSWORD=一个独立的高强度随机值
+```
 
-1. 如果已经登录了后台，web client将自动直接登录
-2. 如果没登录后台，点击右上角登录即可，api server已经自动配置好了
-3. 登录后，会自动同步ID服务器和KEY
-4. 登录后，会将地址簿自动保存到web client中，方便使用
+该值必须与服务器 `.env` 中的 `RDGEN_ZIP_PASSWORD` 完全相同。
 
+再创建一个仅授权当前仓库的 fine-grained personal access token，并给予：
 
-### 自动化文档: 使用 Swag 生成 API 文档，方便开发者理解和使用 API。
+- `Actions: Read and write`
+- `Contents: Read and write`
 
-1. 后台文档 `<youer server[:port]>/admin/swagger/index.html`
-2. PC端文档 `<youer server[:port]>/swagger/index.html`
-   ![api_swag](docs/api_swag.png)
+`Contents` 写权限用于上传未挂到分支上的加密配置 Git blob；`Actions`
+权限用于触发工作流、查询运行、下载和删除 Artifact。不要把 Token 写入仓库。
 
-### CLI
+### 3. 获取部署文件
 
 ```bash
-# 查看帮助
-./apimain -h
+git clone https://github.com/AllenMGu/rustdesk-api.git \
+  /opt/rustdesk-full-s6-generator
+
+cd /opt/rustdesk-full-s6-generator
+cp .env.full-s6-generator.example .env
+chmod 600 .env
 ```
 
-#### 重置管理员密码
+生成两个不同的内部随机密钥：
+
 ```bash
-./apimain reset-admin-pwd <pwd>
+openssl rand -hex 32
+openssl rand -hex 32
 ```
 
-## 安装与运行
+将两个输出分别写入 `RDGEN_SECRET_KEY` 和 `RDGEN_INTERNAL_TOKEN`。
+二者必须不同，也不能使用 GitHub Token 或 ZIP 密码代替。
 
-### 相关配置
+### 4. 配置 `.env`
 
-* [配置文件](./conf/config.yaml)
-* 参考`conf/config.yaml`配置文件，修改相关配置。
-* 如果`gorm.type`是`sqlite`，则不需要配置mysql相关配置。
-* 语言如果不设置默认为`zh-CN`
+最小配置示例：
 
-### 环境变量
-环境变量和配置文件`conf/config.yaml`中的配置一一对应，变量名前缀是`RUSTDESK_API`
-下面表格并未全部列出，可以参考`conf/config.yaml`中的配置。
+```env
+TZ=Asia/Shanghai
 
-| 变量名                                                    | 说明                                                                             | 示例                           |
-|--------------------------------------------------------|--------------------------------------------------------------------------------|------------------------------|
-| TZ                                                     | 时区                                                                             | Asia/Shanghai                |
-| RUSTDESK_API_LANG                                      | 语言                                                                             | `en`,`zh-CN`                 |
-| RUSTDESK_API_APP_WEB_CLIENT                            | 是否启用web-client; 1:启用,0:不启用; 默认启用                                               | 1                            |
-| RUSTDESK_API_APP_REGISTER                              | 是否开启注册; `true`, `false`  默认`false`                                             | `false`                      |
-| RUSTDESK_API_APP_SHOW_SWAGGER                          | 是否可见swagger文档;`1`显示，`0`不显示，默认`0`不显示                                            | `1`                          |
-| RUSTDESK_API_APP_TOKEN_EXPIRE                          | token有效时长                                                                      | `168h`                       |
-| RUSTDESK_API_APP_DISABLE_PWD_LOGIN                     | 是否禁用密码登录;  `true`, `false`  默认`false`                                          | `false`                      |
-| RUSTDESK_API_APP_REGISTER_STATUS                       | 注册用户默认状态; 1 启用，2 禁用, 默认 1                                                      | `1`                          |
-| RUSTDESK_API_APP_CAPTCHA_THRESHOLD                     | 验证码触发次数; -1 不启用， 0 一直启用， >0 登录错误次数后启用 ;默认 `3`                                  | `3`                          |
-| RUSTDESK_API_APP_BAN_THRESHOLD                         | 封禁IP触发次数; 0 不启用, >0 登录错误次数后封禁IP; 默认 `0`                                        | `0`                          |
-| -----ADMIN配置-----                                      | ----------                                                                     | ----------                   |
-| RUSTDESK_API_ADMIN_TITLE                               | 后台标题                                                                           | `RustDesk Api Admin`         |
-| RUSTDESK_API_ADMIN_HELLO                               | 后台欢迎语，可以使用`html`                                                               |                              |
-| RUSTDESK_API_ADMIN_HELLO_FILE                          | 后台欢迎语文件，如果内容多，使用文件更方便。<br>会覆盖`RUSTDESK_API_ADMIN_HELLO`                        | `./conf/admin/hello.html`    |
-| -----GIN配置-----                                        | ----------                                                                     | ----------                   |
-| RUSTDESK_API_GIN_TRUST_PROXY                           | 信任的代理IP列表，以`,`分割，默认信任所有                                                        | `<trusted-proxy-ip-list>`     |
-| -----GORM配置-----                                       | ----------                                                                     | ---------------------------  |
-| RUSTDESK_API_GORM_TYPE                                 | 数据库类型sqlite或者mysql，默认sqlite                                                    | sqlite                       |
-| RUSTDESK_API_GORM_MAX_IDLE_CONNS                       | 数据库最大空闲连接数                                                                     | 10                           |
-| RUSTDESK_API_GORM_MAX_OPEN_CONNS                       | 数据库最大打开连接数                                                                     | 100                          |
-| RUSTDESK_API_RUSTDESK_PERSONAL                         | 是否启用个人版API， 1:启用,0:不启用； 默认启用                                                   | 1                            |
-| -----MYSQL配置-----                                      | ----------                                                                     | ----------                   |
-| RUSTDESK_API_MYSQL_USERNAME                            | mysql用户名                                                                       | root                         |
-| RUSTDESK_API_MYSQL_PASSWORD                            | mysql密码                                                                        | `<mysql-password>`            |
-| RUSTDESK_API_MYSQL_ADDR                                | mysql地址                                                                        | mysql.example.com:3306        |
-| RUSTDESK_API_MYSQL_DBNAME                              | mysql数据库名                                                                      | rustdesk                     |
-| RUSTDESK_API_MYSQL_TLS                             | 是否启用TLS, 可选值: `true`, `false`, `skip-verify`, `custom` | `false`                      |
-| -----RUSTDESK配置-----                                   | ----------                                                                     | ----------                   |
-| RUSTDESK_API_RUSTDESK_ID_SERVER                        | Rustdesk的id服务器地址                                                               | rustdesk.example.com:21116    |
-| RUSTDESK_API_RUSTDESK_RELAY_SERVER                     | Rustdesk的relay服务器地址                                                            | rustdesk.example.com:21117    |
-| RUSTDESK_API_RUSTDESK_API_SERVER                       | Rustdesk的api服务器地址                                                              | https://rustdesk.example.com  |
-| RUSTDESK_API_RUSTDESK_KEY                              | Rustdesk的key                                                                   | `<rustdesk-public-key>`       |
-| RUSTDESK_API_RUSTDESK_KEY_FILE                         | Rustdesk存放key的文件                                                               | `./conf/data/id_ed25519.pub` |
-| RUSTDESK_API_RUSTDESK_WEBCLIENT<br/>_MAGIC_QUERYONLINE | Web client v2 中是否启用新的在线状态查询方法; `1`:启用,`0`:不启用,默认不启用                            | `0`                          |
-| RUSTDESK_API_RUSTDESK_WS_HOST                          | 自定义Websocket Host                                                              | `wss://rustdesk.example.com`  |
-| ----PROXY配置-----                                       | ----------                                                                     | ----------                   |
-| RUSTDESK_API_PROXY_ENABLE                              | 是否启用代理:`false`, `true`                                                         | `false`                      |
-| RUSTDESK_API_PROXY_HOST                                | 代理地址                                                                           | `http://127.0.0.1:1080`      |
-| ----JWT配置----                                          | --------                                                                       | --------                     |
-| RUSTDESK_API_JWT_KEY                                   | 自定义JWT KEY,为空则不启用JWT<br/>如果没使用`lejianwen/rustdesk-server`中的`MUST_LOGIN`，建议设置为空 |                              |
-| RUSTDESK_API_JWT_EXPIRE_DURATION                       | JWT有效时间                                                                        | `168h`                       |
+RUSTDESK_HOST=rustdesk.example.com
+RUSTDESK_API_PUBLIC_URL=https://rustdesk.example.com
+RUSTDESK_API_LANG=zh-CN
+ENCRYPTED_ONLY=1
+MUST_LOGIN=Y
 
+RDGEN_GITHUB_USER=AllenMGu
+RDGEN_GITHUB_REPOSITORY=rustdesk-api
+RDGEN_GITHUB_BRANCH=master
+RDGEN_GITHUB_TOKEN=替换为当前仓库的Fine-grained-Token
 
-### 运行
+RDGEN_SECRET_KEY=替换为第一个随机值
+RDGEN_INTERNAL_TOKEN=替换为第二个随机值
+RDGEN_ZIP_PASSWORD=替换为与Actions中ZIP_PASSWORD相同的值
 
-#### docker运行
-
-1. 直接docker运行,配置可以通过挂载配置文件`/app/conf/config.yaml`来修改,或者通过环境变量覆盖配置文件中的配置
-
-    ```bash
-    docker run -d --name rustdesk-api -p 21114:21114 \
-    -v /data/rustdesk/api:/app/data \
-    -e TZ=Asia/Shanghai \
-    -e RUSTDESK_API_LANG=zh-CN \
-    -e RUSTDESK_API_RUSTDESK_ID_SERVER=rustdesk.example.com:21116 \
-    -e RUSTDESK_API_RUSTDESK_RELAY_SERVER=rustdesk.example.com:21117 \
-    -e RUSTDESK_API_RUSTDESK_API_SERVER=https://rustdesk.example.com \
-    -e RUSTDESK_API_RUSTDESK_KEY=<key> \
-    lejianwen/rustdesk-api
-    ```
-
-2. 使用`docker compose`，参考[WIKI](https://github.com/lejianwen/rustdesk-api/wiki)
-
-3. 如需在同一 Full S6 容器中运行 RustDesk 服务、API 和多平台客户端生成器，
-   使用 `full-s6-generator` 镜像：
-
-   ```bash
-   cp .env.full-s6-generator.example .env
-   # 编辑 .env，并限制其中 GitHub Token 和密码的读取权限
-   chmod 600 .env
-   podman-compose -f docker-compose.full-s6-generator.yaml up -d
-   ```
-
-   客户端生成流程：
-
-   1. S6 服务器将加密配置上传为 GitHub Git blob，并触发
-      当前 `AllenMGu/rustdesk-api` 仓库内的 RDGen GitHub Actions。
-   2. GitHub Actions 编译所选 Windows、Linux、Android 或 macOS 客户端，并
-      上传名为 `rdgen-<构建UUID>` 或 `rdgen-<构建UUID>-<目标>` 的 Artifact。
-   3. S6 中的 `rdgen-poller` 服务默认每 60 秒查询一次运行状态。
-   4. 编译成功后，S6 主动下载对应 Artifact，并保存到：
-
-      ```text
-      ./data/rdgen/exe/<构建UUID>/<生成文件>
-      ```
-   5. S6 只有在验证该平台所需产物均已完整保存后，才会删除该次
-      GitHub Actions 运行的全部 Artifact。下载失败会保留 GitHub
-      Artifact，供下一轮查询重试。
-
-   此流程不需要公网 IP、入站 NAT、GitHub 回调地址或 self-hosted
-   runner；S6 服务器只需能够主动访问 GitHub HTTPS。
-
-   `AllenMGu/rustdesk-api` 仓库需配置 Actions Secret：
-
-   - `ZIP_PASSWORD`：与 `.env` 中的 `RDGEN_ZIP_PASSWORD` 相同。
-
-   `RDGEN_GITHUB_TOKEN` 使用仅限 `AllenMGu/rustdesk-api` 的 fine-grained token，
-   仓库权限设置为：
-
-   - `Actions: Read and write`
-   - `Contents: Read and write`
-
-   常用环境变量：
-
-   | 变量 | 说明 | 默认值 |
-   |---|---|---|
-   | `TZ` | 容器时区 | `Asia/Shanghai` |
-   | `RUSTDESK_HOST` | 客户端可访问的服务器主机名或 IP，不含协议和端口 | 必填 |
-   | `RUSTDESK_API_PUBLIC_URL` | 浏览器访问 API 的完整 HTTP(S) URL | 必填 |
-   | `RUSTDESK_API_LANG` | API Web 界面语言：`zh-CN` 或 `en` | `zh-CN` |
-   | `ENCRYPTED_ONLY` | RustDesk 服务是否只接受加密连接 | `0` |
-   | `MUST_LOGIN` | RustDesk 客户端是否必须登录后使用 | `N` |
-   | `RDGEN_SECRET_KEY` | Django 服务随机密钥，可用 `openssl rand -hex 32` 生成 | 必填 |
-   | `RDGEN_INTERNAL_TOKEN` | API 反向代理访问内部生成器的独立随机令牌 | 必填 |
-   | `RDGEN_GITHUB_USER` | 当前单仓所有者 | `AllenMGu` |
-   | `RDGEN_GITHUB_REPOSITORY` | 包含 API 与 RDGen 的仓库名 | `rustdesk-api` |
-   | `RDGEN_GITHUB_BRANCH` | 触发单仓 RDGen 工作流的分支 | `master` |
-   | `RDGEN_GITHUB_TOKEN` | 触发、查询并下载 GitHub Actions Artifact | 必填 |
-   | `RDGEN_ZIP_PASSWORD` | 加密客户端构建配置 | 必填 |
-   | `RDGEN_GITHUB_POLL_INTERVAL` | S6 查询构建状态的间隔（秒） | `60` |
-   | `RDGEN_GITHUB_BUILD_TIMEOUT` | 单个任务允许查询的最长时间（秒） | `21600` |
-   | `RDGEN_WORKERS` | 内部生成器 Gunicorn worker 数量 | `2` |
-   | `RDGEN_THREADS` | 每个 worker 的线程数 | `4` |
-   | `RDGEN_DEFAULT_PERMANENT_PASSWORD` | 页面未填写永久密码时嵌入客户端的默认密码 | 空 |
-   | `RUSTDESK_SOURCE_REPOSITORY` | 编译使用的 RustDesk 源码仓库（所有者/仓库） | `AllenMGu/rustdesk` |
-   | `RUSTDESK_SOURCE_REF` | 固定源码分支、标签或提交；非空时覆盖页面版本选择 | `master` |
-
-   `data/rdgen/exe` 使用宿主机 bind mount，更新容器镜像后生成的
-   各平台安装包仍会保留。管理员可在“客户端生成器”页面删除某个任务
-   的整组安装包；此操作只删除 S6 服务器本地文件。
-
-   若希望页面的 RustDesk 版本选择直接切换官方标签，请设置
-   `RUSTDESK_SOURCE_REPOSITORY=rustdesk/rustdesk`，并将
-   `RUSTDESK_SOURCE_REF` 留空。使用自定义仓库或固定提交时，应明确设置
-   `RUSTDESK_SOURCE_REF`；此时每次编译都会检出同一个源码 ref。
-
-#### 下载release直接运行
-
-[下载地址](https://github.com/lejianwen/rustdesk-api/releases)
-
-#### 源码安装
-
-1. 克隆仓库
-   ```bash
-   git clone https://github.com/lejianwen/rustdesk-api.git
-   cd rustdesk-api
-   ```
-
-2. 安装依赖
-
-    ```bash
-    go mod tidy
-    #安装swag，如果不需要生成文档，可以不安装
-    go install github.com/swaggo/swag/cmd/swag@latest
-    ```
-
-3. 编译后台前端，前端代码在[rustdesk-api-web](https://github.com/lejianwen/rustdesk-api-web)中
-   ```bash
-   cd resources
-   mkdir -p admin
-   git clone https://github.com/lejianwen/rustdesk-api-web
-   cd rustdesk-api-web
-   npm install
-   npm run build
-   cp -ar dist/* ../admin/
-   ```
-4. 运行
-    ```bash
-    #直接运行
-    go run cmd/apimain.go
-    #或者使用generate_api.go生成api并运行
-    go generate generate_api.go
-    ```
-   > 注意：使用 `go run` 或编译后的二进制时，当前目录下必须存在 `conf` 和 `resources`
-   > 目录。如果在其他目录运行，可通过 `-c` 和环境变量
-   > `RUSTDESK_API_GIN_RESOURCES_PATH` 指定绝对路径，例如：
-   > ```bash
-   > RUSTDESK_API_GIN_RESOURCES_PATH=/opt/rustdesk-api/resources ./apimain -c /opt/rustdesk-api/conf/config.yaml
-   > ```
-5. 编译，如果想自己编译,先cd到项目根目录，然后windows下直接运行`build.bat`,linux下运行`build.sh`,编译后会在`release`
-   目录下生成对应的可执行文件。直接运行编译后的可执行文件即可。
-
-6. 打开浏览器访问`http://<your server[:port]>/_admin/`，默认用户名密码为`admin`，请及时更改密码。
-
-
-#### 使用`lejianwen/server-s6`镜像运行
-
-- 已解决链接超时问题
-- 可以强制登录后才能发起链接
-- github https://github.com/lejianwen/rustdesk-server
-
-```yaml
- networks:
-   rustdesk-net:
-     external: false
- services:
-   rustdesk:
-     ports:
-       - 21114:21114
-       - 21115:21115
-       - 21116:21116
-       - 21116:21116/udp
-       - 21117:21117
-       - 21118:21118
-       - 21119:21119
-     image: lejianwen/rustdesk-server-s6:latest
-     environment:
-       - RELAY=<relay_server[:port]>
-       - ENCRYPTED_ONLY=1
-       - MUST_LOGIN=N
-       - TZ=Asia/Shanghai
-       - RUSTDESK_API_RUSTDESK_ID_SERVER=<id_server[:21116]>
-       - RUSTDESK_API_RUSTDESK_RELAY_SERVER=<relay_server[:21117]>
-       - RUSTDESK_API_RUSTDESK_API_SERVER=http://<api_server[:21114]>
-       - RUSTDESK_API_KEY_FILE=/data/id_ed25519.pub
-       - RUSTDESK_API_JWT_KEY=<jwt-key> # jwt key
-     volumes:
-       - /data/rustdesk/server:/data
-       - /data/rustdesk/api:/app/data #将数据库挂载
-     networks:
-       - rustdesk-net
-     restart: unless-stopped
-       
+RUSTDESK_SOURCE_REPOSITORY=AllenMGu/rustdesk
+RUSTDESK_SOURCE_REF=master
 ```
 
+关键变量说明：
 
-## 其他
+| 变量 | 说明 | 默认值 |
+|---|---|---|
+| `TZ` | 容器时区 | `Asia/Shanghai` |
+| `RUSTDESK_HOST` | 客户端可访问的主机名或 IP，不带协议和端口 | 必填 |
+| `RUSTDESK_API_PUBLIC_URL` | 浏览器访问 API 的完整 HTTP(S) URL | 必填 |
+| `RUSTDESK_API_LANG` | API Web 语言：`zh-CN` 或 `en` | `zh-CN` |
+| `ENCRYPTED_ONLY` | 是否只接受加密的 RustDesk 连接：`0`/`1` | `0` |
+| `MUST_LOGIN` | 客户端是否必须登录后使用：`N`/`Y` | `N` |
+| `RDGEN_SECRET_KEY` | RDGEN Django 随机密钥 | 必填 |
+| `RDGEN_INTERNAL_TOKEN` | API 代理访问内部 RDGEN 的独立令牌 | 必填 |
+| `RDGEN_GITHUB_TOKEN` | 触发 Actions、查询任务和管理 Artifact | 必填 |
+| `RDGEN_ZIP_PASSWORD` | 加密构建配置，必须匹配 Actions Secret | 必填 |
+| `RDGEN_GITHUB_POLL_INTERVAL` | 查询构建状态的间隔，单位秒 | `60` |
+| `RDGEN_GITHUB_BUILD_TIMEOUT` | 单次构建查询超时，单位秒 | `21600` |
+| `RDGEN_WORKERS` | 内部 Gunicorn worker 数量 | `2` |
+| `RDGEN_THREADS` | 每个 worker 的线程数 | `4` |
+| `RDGEN_DEFAULT_PERMANENT_PASSWORD` | 表单未填写时嵌入客户端的默认永久密码 | 空 |
+| `RUSTDESK_SOURCE_REPOSITORY` | 编译使用的 RustDesk 源码仓库 | `AllenMGu/rustdesk` |
+| `RUSTDESK_SOURCE_REF` | 固定分支、Tag 或 Commit；非空时覆盖页面版本选择 | `master` |
 
-- [WIKI](https://github.com/lejianwen/rustdesk-api/wiki)
-- [链接超时问题](https://github.com/lejianwen/rustdesk-api/issues/92)
-- [修改客户端ID](https://github.com/abdullah-erturk/RustDesk-ID-Changer)
-- [webclient来源](https://hub.docker.com/r/keyurbhole/flutter_web_desk)
+如果要由页面直接选择 RustDesk 官方 Tag，请设置：
 
+```env
+RUSTDESK_SOURCE_REPOSITORY=rustdesk/rustdesk
+RUSTDESK_SOURCE_REF=
+```
 
-## 鸣谢
+完整模板见 [.env.full-s6-generator.example](.env.full-s6-generator.example)。
 
-感谢所有做过贡献的人!
+### 5. 配置客户端默认值（可选）
 
-<a href="https://github.com/lejianwen/rustdesk-api/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=lejianwen/rustdesk-api" />
-</a>
+```bash
+mkdir -p data/api
+cp config/rdgen-client-defaults.example.json \
+  data/api/rdgen-client-defaults.json
+chmod 600 data/api/rdgen-client-defaults.json
+```
 
-## 感谢你的支持！如果这个项目对你有帮助，请点个⭐️鼓励一下，谢谢！
+编辑 `data/api/rdgen-client-defaults.json` 可预设服务器地址、API URL、
+应用名称、公司名称和安装包文件名。不要在该文件中保存永久密码、解锁 PIN、
+CSRF Token 或其他秘密字段。
 
-[lejianwen/rustdesk-server]: https://github.com/lejianwen/rustdesk-server
+默认永久密码只能通过 `.env` 中的 `RDGEN_DEFAULT_PERMANENT_PASSWORD` 设置。
+
+### 6. 启动容器
+
+Podman：
+
+```bash
+podman pull ghcr.io/allenmgu/rustdesk-api:full-s6-generator
+
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  config >/dev/null
+
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  up -d
+```
+
+Docker：
+
+```bash
+docker compose \
+  --env-file .env \
+  -f docker-compose.full-s6-generator.yaml \
+  pull
+
+docker compose \
+  --env-file .env \
+  -f docker-compose.full-s6-generator.yaml \
+  up -d
+```
+
+检查状态：
+
+```bash
+podman ps --filter name=rustdesk-full-s6-generator
+podman logs --since 10m rustdesk-full-s6-generator 2>&1 | tail -n 200
+```
+
+### 7. 网络与访问地址
+
+Compose 使用 `network_mode: host`。服务器防火墙至少需要按使用场景放行：
+
+| 端口 | 协议 | 用途 |
+|---|---|---|
+| `21114` | TCP | RustDesk API / Web Admin |
+| `21115` | TCP | NAT 类型测试 |
+| `21116` | TCP、UDP | RustDesk ID/信令服务 |
+| `21117` | TCP | RustDesk Relay |
+| `21118` | TCP | WebSocket ID 服务 |
+| `21119` | TCP | WebSocket Relay |
+| `8000` | TCP | RDGEN 内部服务，必须保持仅本机访问 |
+
+使用 firewalld 的示例：
+
+```bash
+firewall-cmd --permanent --add-port=21114-21119/tcp
+firewall-cmd --permanent --add-port=21116/udp
+firewall-cmd --reload
+```
+
+建议使用 Nginx、Caddy 或其他反向代理为 `21114` 提供 HTTPS。不要把 `8000` 映射或开放给外部网络。
+
+管理后台：
+
+```text
+https://你的API域名/_admin/
+```
+
+初次启动时，`admin` 用户的随机密码会写入容器日志。登录后请立即修改密码。
+
+## RDGEN 构建流程
+
+1. 管理员在 API Web 中填写并提交客户端配置。
+2. API 使用 `RDGEN_INTERNAL_TOKEN` 访问仅监听本机的 RDGEN。
+3. RDGEN 校验配置，加密后上传为当前仓库中的未引用 Git blob。
+4. RDGEN 按平台触发本仓库根目录中的生成器工作流。
+5. GitHub Actions 编译客户端，并上传 `rdgen-<构建UUID>` 或 `rdgen-<构建UUID>-<目标>` Artifact。
+6. S6 中的 `rdgen-poller` 定时查询运行状态并主动下载 Artifact。
+7. Poller 校验该平台要求的所有产物后，将文件保存到持久化目录。
+8. 本地文件完整落盘后，Poller 才删除该次运行的远端 Artifact；下载失败会在下一轮重试。
+
+安装包保存在：
+
+```text
+/opt/rustdesk-full-s6-generator/data/rdgen/exe/<构建UUID>/<生成文件>
+```
+
+容器内对应路径为：
+
+```text
+/opt/rdgen/exe/<构建UUID>/<生成文件>
+```
+
+## 持久化数据
+
+| 宿主机目录 | 内容 |
+|---|---|
+| `data/server` | RustDesk Server 数据库、公钥和私钥 |
+| `data/api` | API 数据库、配置和 RDGEN 客户端默认值 |
+| `data/rdgen/database` | RDGEN 数据库 |
+| `data/rdgen/exe` | 已下载的各平台客户端安装包 |
+| `data/rdgen/png` | 生成器上传的图标和 Logo |
+| `data/rdgen/temp-zips` | 临时加密配置包 |
+
+这些路径通过 bind mount 保存在宿主机。更新或重建容器不会删除数据，但不要删除部署目录中的 `data`。
+
+## 更新 Full S6 镜像
+
+确认没有正在生成的客户端后执行：
+
+```bash
+cd /opt/rustdesk-full-s6-generator
+
+cp -a .env ".env.bak.$(date +%Y%m%d-%H%M%S)"
+git pull --ff-only origin master
+
+podman pull ghcr.io/allenmgu/rustdesk-api:full-s6-generator
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  up -d --force-recreate
+```
+
+如果当前目录有未提交的本地修改，先运行 `git status --short` 并处理差异，
+不要强制覆盖。若 `podman-compose` 不支持 `--force-recreate`，可删除并重建容器；
+只要 `data` 目录仍在，持久化数据不会丢失。
+
+不要执行会删除镜像和卷的全局清理命令，也不要删除 `/opt/rustdesk-full-s6-generator/data`。
+
+## 常用管理命令
+
+### 查看 S6 服务日志
+
+```bash
+podman logs --since 30m rustdesk-full-s6-generator 2>&1 | tail -n 300
+```
+
+### 重置 API 管理员密码
+
+```bash
+read -rsp "New admin password: " api_admin_new_password
+echo
+
+podman exec -w /app \
+  rustdesk-full-s6-generator \
+  ./apimain reset-admin-pwd "$api_admin_new_password"
+
+unset api_admin_new_password
+```
+
+### 手动查询一次 GitHub 构建
+
+```bash
+podman exec --user rdgen -w /opt/rdgen \
+  rustdesk-full-s6-generator \
+  /opt/rdgen/.venv/bin/python manage.py poll_github_artifacts --once
+```
+
+### 查看 Artifact 轮询进程
+
+```bash
+podman exec rustdesk-full-s6-generator \
+  sh -c "ps -ef | grep '[p]oll_github_artifacts'"
+```
+
+## 常见问题
+
+### `RuntimeError: Set RDGEN_INTERNAL_TOKEN`
+
+新版本要求独立的内部通信令牌。生成一次并长期保留：
+
+```bash
+openssl rand -hex 32
+```
+
+将结果写入 `.env`：
+
+```env
+RDGEN_INTERNAL_TOKEN=生成的64位十六进制随机值
+```
+
+然后重新执行 `podman-compose ... up -d`。不要每次更新镜像时重新生成。
+
+### Actions 无法触发或返回 403
+
+检查：
+
+- `RDGEN_GITHUB_USER=AllenMGu`
+- `RDGEN_GITHUB_REPOSITORY=rustdesk-api`
+- `RDGEN_GITHUB_BRANCH=master`
+- Token 仅授权当前仓库，并具有 `Actions: Read and write`、`Contents: Read and write`
+- Token 未过期，也未被组织策略阻止
+
+### Actions 已成功，但服务器没有安装包
+
+依次检查：
+
+1. 管理后台中的任务 `run_id`、`status` 和 `last_error`。
+2. `rdgen-poller` 是否正在运行。
+3. 服务器是否能访问 GitHub API 与 Artifact 下载地址。
+4. `data/rdgen/exe` 是否可写以及磁盘空间是否充足。
+5. 手动运行一次 `poll_github_artifacts --once` 并观察输出。
+
+### 更新后容器不存在
+
+如果镜像已经成功拉取，但 Compose 在变量校验阶段失败，容器不会被创建。先修复 `.env` 中提示缺失的变量，再运行：
+
+```bash
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  config >/dev/null && \
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  up -d
+```
+
+### 非 Windows 平台没有出现在 Actions
+
+必须使用包含以下根工作流的新版本仓库与镜像：
+
+- `.github/workflows/generator-android.yml`
+- `.github/workflows/generator-linux.yml`
+- `.github/workflows/generator-macos.yml`
+
+旧容器即使仓库工作流已经存在，API 后端也可能仍限制平台选择，因此仓库和 `full-s6-generator` 镜像需要一起更新。
+
+## 仅运行 API
+
+如果已有独立的 RustDesk Server，只需要 API 和 Web 管理后台，可以运行普通镜像：
+
+```bash
+podman run -d \
+  --name rustdesk-api \
+  --restart unless-stopped \
+  -p 21114:21114 \
+  -v /data/rustdesk/api:/app/data:Z \
+  -e TZ=Asia/Shanghai \
+  -e RUSTDESK_API_LANG=zh-CN \
+  -e RUSTDESK_API_RUSTDESK_ID_SERVER=rustdesk.example.com:21116 \
+  -e RUSTDESK_API_RUSTDESK_RELAY_SERVER=rustdesk.example.com:21117 \
+  -e RUSTDESK_API_RUSTDESK_API_SERVER=https://rustdesk.example.com \
+  -e RUSTDESK_API_RUSTDESK_KEY='<rustdesk-public-key>' \
+  ghcr.io/allenmgu/rustdesk-api:latest
+```
+
+API 配置文件为 [conf/config.yaml](conf/config.yaml)。环境变量与配置项一一对应，
+变量使用 `RUSTDESK_API_` 前缀。数据库支持 SQLite、MySQL 和 PostgreSQL；
+不配置外部数据库时默认使用 SQLite。
+
+Swagger 地址：
+
+- 管理接口：`/admin/swagger/index.html`
+- 客户端接口：`/swagger/index.html`
+
+Swagger 默认不公开，可通过配置显式启用。
+
+## 源码与镜像构建
+
+普通 API 使用 `Dockerfile`，Full S6 使用 `Dockerfile_full_s6`，带客户端生成器的一体化镜像使用 `Dockerfile_full_s6_generator`。
+
+本地构建 Full S6 Generator 示例：
+
+```bash
+docker build \
+  --build-arg BUILDARCH=amd64 \
+  -f Dockerfile_full_s6_generator \
+  -t rustdesk-api:full-s6-generator .
+```
+
+发布工作流会生成 amd64、arm64 和 armv7l 镜像并创建多架构 manifest。若只发布到 GHCR，可在手动运行 `Build` 工作流时设置：
+
+```text
+SKIP_DOCKER_HUB=true
+SKIP_GHCR=false
+```
+
+RDGEN 的开发与测试说明见 [rdgen/README.md](rdgen/README.md)，完整生产部署细节见 [docs/full-s6-generator.md](docs/full-s6-generator.md)。
+
+## 安全建议
+
+- 使用 HTTPS 访问管理后台和 API。
+- 保持 `RDGEN_BIND_HOST=127.0.0.1`，禁止外部访问 `8000/tcp`。
+- GitHub Token 只授权 `AllenMGu/rustdesk-api`，不要授予账户级或其他仓库权限。
+- `RDGEN_SECRET_KEY`、`RDGEN_INTERNAL_TOKEN`、`RDGEN_ZIP_PASSWORD` 必须使用不同的随机值。
+- 不要把 `.env`、永久密码、GitHub Token、签名证书或 RustDesk 私钥提交到 Git。
+- 默认配置只会把 `/data/id_ed25519.pub` 公钥复制给生成器，私钥不会复制到 RDGEN。
+- 生成器中的永久密码会被嵌入客户端，泄露后应立即轮换并重新生成客户端。
+- 定期更新镜像和 RustDesk 源码，并在生产发布前验证自定义客户端的签名和来源。
+
+## 来源、许可证与致谢
+
+本仓库整合和修改了多个开源项目：
+
+| 项目 | 用途 | 来源 |
+|---|---|---|
+| RustDesk Server S6 | Full S6 容器、S6 服务编排与 Server/API 整合基础 | [源码：lejianwen/rustdesk-server `forapi`](https://github.com/lejianwen/rustdesk-server/tree/forapi)；[镜像：lejianwen/rustdesk-server-s6](https://hub.docker.com/r/lejianwen/rustdesk-server-s6) |
+| RustDesk API | Go API、Web Admin、Web Client 与管理功能 | [lejianwen/rustdesk-api](https://github.com/lejianwen/rustdesk-api) |
+| RDGEN | 自定义 RustDesk 客户端生成器 | [bryangerlach/rdgen](https://github.com/bryangerlach/rdgen) |
+| RustDesk | 远程桌面客户端与服务端上游 | [rustdesk/rustdesk](https://github.com/rustdesk/rustdesk) |
+| s6-overlay | 容器内服务初始化与监管 | [just-containers/s6-overlay](https://github.com/just-containers/s6-overlay) |
+
+其中，**本仓库 Full S6 方案的直接来源是 `lejianwen/rustdesk-server` 中的
+S6-overlay 方案及其 `lejianwen/rustdesk-server-s6` 镜像**。
+本仓库的主要二次开发内容包括：
+
+- 将 RDGEN 全部代码迁入 `rustdesk-api` 单仓库。
+- 将 API、RDGEN、`hbbs`、`hbbr` 和 Poller 纳入同一个 S6 生命周期。
+- 将客户端生成改为 GitHub Artifact 出站拉取模式。
+- 增加内部代理鉴权、输入校验、上传限制和 Artifact 访问控制。
+- 恢复并适配 Windows、Linux、Android 和 macOS 多平台构建。
+
+根目录 API 代码使用 [MIT License](LICENSE)。`rdgen/` 组件保留其 [GNU GPL v3](rdgen/LICENSE)。其他上游组件和生成产物分别适用各自许可证；使用、修改或再分发时请同时遵守相应许可与署名要求。
+
+感谢以上项目的维护者和所有贡献者。
