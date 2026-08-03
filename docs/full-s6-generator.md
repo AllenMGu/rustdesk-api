@@ -15,13 +15,13 @@ Administrators open RustDesk API Web on port `21114` and select
 downloads all use the existing API Web login. Port `8000` is bound to localhost
 only for diagnostics and is not a user-facing frontend.
 
-The container does not compile Windows programs locally. rdgen sends an
-encrypted configuration to GitHub and dispatches the generator workflow in
-`AllenMGu/rustdesk-api`; GitHub-hosted Windows runners compile the selected
-`AllenMGu/rustdesk` source ref. When compilation finishes, the runner uploads
-the EXE/MSI to GitHub Actions Artifacts. The S6 poller queries the run, downloads
-the files to local persistent storage, verifies the complete output set, and
-then deletes all Artifacts belonging to that run.
+The container does not compile clients locally. rdgen sends an encrypted
+configuration to GitHub and dispatches the selected Windows, Linux, Android, or
+macOS generator workflow in `AllenMGu/rustdesk-api`. When compilation finishes,
+the runners upload the platform packages to GitHub Actions Artifacts. The S6
+poller queries the run, downloads the files to local persistent storage,
+verifies the platform-specific output set, and then deletes all Artifacts
+belonging to that run.
 
 ## 1. Configure the rustdesk-api repository
 
@@ -144,7 +144,7 @@ Completed files remain on the S6 host at:
 ```
 
 Open RustDesk API Web and select `系统管理 -> 客户端生成器` to list and
-download all saved clients. Use “删除整组” to remove every local EXE/MSI for
+download all saved clients. Use “删除整组” to remove every local package for
 one build UUID. Files otherwise remain until an administrator deletes them and
 survive container image updates because this path is a bind mount.
 
