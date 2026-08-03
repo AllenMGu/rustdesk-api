@@ -304,6 +304,187 @@ https://你的API域名/_admin/
 
 这些路径通过 bind mount 保存在宿主机。更新或重建容器不会删除数据，但不要删除部署目录中的 `data`。
 
+## 从原版 S6 迁移数据库和密钥
+
+本节适用于从 `lejianwen/rustdesk-server-s6` 或兼容的 S6 部署迁移到本仓库的
+`full-s6-generator`。迁移会保留 RustDesk Server 的设备数据库、服务器密钥和
+RustDesk API 数据；原版 S6 不包含 RDGEN，因此 RDGEN 数据库会在 Full S6
+首次启动时新建。
+
+> **不要让旧 S6 和 Full S6 同时运行。** 两个容器会占用相同端口，也不能同时写入同一份 SQLite 数据库。必须先停止旧容器，再复制数据。
+
+### 1. 确认旧容器的真实挂载路径
+
+原版 S6 文档的默认挂载是：
+
+| 旧容器路径 | 旧宿主机默认路径 | Full S6 目标路径 |
+|---|---|---|
+| `/data` | `/data/rustdesk/server` | `data/server` |
+| `/app/data` | `/data/rustdesk/api` | `data/api` |
+
+先查看旧容器，不能只根据表格猜测。以下示例使用 Podman；Docker 用户将
+`podman` 替换为 `docker`：
+
+```bash
+old_s6_container=rustdesk-server
+
+podman inspect "$old_s6_container" \
+  --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
+```
+
+记录实际映射到 `/data` 和 `/app/data` 的两个宿主机目录。下文假设它们分别是
+`/data/rustdesk/server` 和 `/data/rustdesk/api`；如果检查结果不同，必须修改变量。
+
+如果 API 使用 MySQL 或 PostgreSQL，`/app/data` 不是外部数据库本身。需要保留原数据库，
+并把相同的数据库连接配置提供给 Full S6；不要把本节的目录复制当作外部数据库迁移。
+
+### 2. 停止旧 S6 并制作一致性备份
+
+先确认旧容器名称无误，再停止它，避免复制过程中数据库仍在写入：
+
+```bash
+old_s6_container=rustdesk-server
+old_server_dir=/data/rustdesk/server
+old_api_dir=/data/rustdesk/api
+new_deploy_dir=/opt/rustdesk-full-s6-generator
+migration_stamp="$(date +%Y%m%d-%H%M%S)"
+migration_backup_dir="/opt/rustdesk-s6-backup-${migration_stamp}"
+
+podman stop "$old_s6_container"
+
+install -d -m 0700 "$migration_backup_dir"
+cp -a "$old_server_dir" "$migration_backup_dir/server"
+cp -a "$old_api_dir" "$migration_backup_dir/api"
+```
+
+后续步骤继续使用这些变量，请在同一个 root Shell 中执行；如果中途重新登录，先重新定义
+`old_s6_container`、`old_server_dir`、`old_api_dir`、`new_deploy_dir`、
+`migration_stamp` 和 `migration_backup_dir`，不要使用空变量继续操作。
+
+确认备份中至少能看到 Server 数据和密钥：
+
+```bash
+find "$migration_backup_dir/server" -maxdepth 1 -type f -printf '%f\n'
+find "$migration_backup_dir/api" -maxdepth 2 -type f -printf '%P\n'
+```
+
+Server 目录通常包含 `db_v2.sqlite3`、`id_ed25519` 和 `id_ed25519.pub`。
+文件名可能随 Server/API 版本和数据库配置不同，以实际挂载目录为准。
+
+### 3. 复制到 Full S6 数据目录
+
+如果 Full S6 从未启动，直接创建目标目录并复制：
+
+```bash
+install -d -m 0750 \
+  "$new_deploy_dir/data/server" \
+  "$new_deploy_dir/data/api" \
+  "$new_deploy_dir/data/rdgen/database" \
+  "$new_deploy_dir/data/rdgen/exe" \
+  "$new_deploy_dir/data/rdgen/png" \
+  "$new_deploy_dir/data/rdgen/temp-zips"
+
+cp -a "$old_server_dir/." "$new_deploy_dir/data/server/"
+cp -a "$old_api_dir/." "$new_deploy_dir/data/api/"
+```
+
+如果 Full S6 已经启动过，先停止它，并把它已经生成的数据目录改名保留，禁止直接覆盖：
+
+```bash
+podman stop rustdesk-full-s6-generator 2>/dev/null || true
+
+mv "$new_deploy_dir/data/server" \
+  "$new_deploy_dir/data/server.before-s6-migration-${migration_stamp}"
+mv "$new_deploy_dir/data/api" \
+  "$new_deploy_dir/data/api.before-s6-migration-${migration_stamp}"
+
+install -d -m 0750 \
+  "$new_deploy_dir/data/server" \
+  "$new_deploy_dir/data/api"
+
+cp -a "$old_server_dir/." "$new_deploy_dir/data/server/"
+cp -a "$old_api_dir/." "$new_deploy_dir/data/api/"
+```
+
+### 4. 验证密钥和数据库没有改变
+
+私钥和公钥必须与旧 S6 完全一致，否则现有客户端会把 Full S6 识别为另一台服务器：
+
+```bash
+test -s "$new_deploy_dir/data/server/id_ed25519"
+test -s "$new_deploy_dir/data/server/id_ed25519.pub"
+
+cmp "$old_server_dir/id_ed25519" \
+  "$new_deploy_dir/data/server/id_ed25519"
+cmp "$old_server_dir/id_ed25519.pub" \
+  "$new_deploy_dir/data/server/id_ed25519.pub"
+
+sha256sum \
+  "$old_server_dir/id_ed25519" \
+  "$new_deploy_dir/data/server/id_ed25519"
+sha256sum \
+  "$old_server_dir/id_ed25519.pub" \
+  "$new_deploy_dir/data/server/id_ed25519.pub"
+```
+
+两组 SHA-256 必须分别相同，`cmp` 正常时没有输出。再检查数据库文件存在且不是空文件：
+
+```bash
+find "$new_deploy_dir/data/server" \
+  -maxdepth 1 -type f -size +0c -name '*.sqlite*' -printf '%f %s bytes\n'
+find "$new_deploy_dir/data/api" \
+  -maxdepth 2 -type f -size +0c -printf '%P %s bytes\n'
+```
+
+如果旧 S6 通过 `KEY_PRIV`/`KEY_PUB` 环境变量或 Docker Secret 提供密钥，但旧挂载目录中
+没有 `id_ed25519` 和 `id_ed25519.pub`，此时不要启动 Full S6。应使用原来的配置和持久化目录
+再启动一次旧 S6，让它把同一密钥写入 `/data`，停止后重新执行备份和复制。不要把私钥粘贴到
+Shell 命令、README、聊天记录或 Git 仓库中。
+
+### 5. 配置并启动 Full S6
+
+复制数据不会迁移容器环境变量。请在新部署的 `.env` 中重新配置服务器地址、API 地址、
+登录策略和 RDGEN 变量。旧部署若还使用 LDAP、`RUSTDESK_API_JWT_KEY` 或外部数据库变量，
+也必须把它们加入新 Compose 的 `services.rustdesk.environment`；仅写入 `.env`、但 Compose
+没有引用的变量不会进入容器。配置完成后执行：
+
+```bash
+cd "$new_deploy_dir"
+
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  config >/dev/null
+
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  up -d
+```
+
+Compose 中的 `:Z` 会在启用 SELinux 的 Podman 主机上重新标记目标目录。启动后检查：
+
+```bash
+podman ps --filter name=rustdesk-full-s6-generator
+podman logs --since 10m \
+  rustdesk-full-s6-generator 2>&1 | tail -n 200
+
+podman inspect rustdesk-full-s6-generator \
+  --format '状态={{.State.Status}} 健康={{if .State.Health}}{{.State.Health.Status}}{{else}}未配置{{end}}'
+```
+
+最后使用原来的管理员账号登录 API，确认用户、设备和地址簿存在，并用一个原有客户端测试
+ID Server、Relay 和登录。确认迁移成功前，不要删除旧目录和 `$migration_backup_dir`。
+
+### 6. 回滚
+
+如果新容器无法启动或数据不正确，停止 Full S6，然后重新启动仍指向旧数据目录的原 S6：
+
+```bash
+podman stop rustdesk-full-s6-generator 2>/dev/null || true
+podman start "$old_s6_container"
+```
+
+本流程使用复制而不是移动旧数据，因此只要未删除旧挂载目录，回滚不会依赖新容器。
+
 ## 更新 Full S6 镜像
 
 确认没有正在生成的客户端后执行：
