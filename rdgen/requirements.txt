@@ -1,0 +1,5 @@
+django==6.0.7
+requests==2.34.2
+pillow==12.3.0
+gunicorn==26.0.0
+pyzipper==0.4.0

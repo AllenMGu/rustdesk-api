@@ -1,0 +1,62 @@
+name: RDGen Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'rdgen/**'
+      - '.github/actions/decrypt-secrets/**'
+      - '.github/patches/**'
+      - '.github/workflows/generator-*.yml'
+      - '.github/workflows/fetch-encrypted-secrets.yml'
+      - '.github/workflows/bridge.yml'
+      - '.github/workflows/third-party-RustDeskTempTopMostWindow.yml'
+      - 'Dockerfile_full_s6_generator'
+  push:
+    branches:
+      - master
+    paths:
+      - 'rdgen/**'
+      - '.github/actions/decrypt-secrets/**'
+      - '.github/patches/**'
+      - '.github/workflows/generator-*.yml'
+      - '.github/workflows/fetch-encrypted-secrets.yml'
+      - '.github/workflows/bridge.yml'
+      - '.github/workflows/third-party-RustDeskTempTopMostWindow.yml'
+      - 'Dockerfile_full_s6_generator'
+
+permissions:
+  contents: read
+
+jobs:
+  django:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rdgen
+    env:
+      SECRET_KEY: test-only-django-secret
+      ALLOWED_HOSTS: localhost,127.0.0.1
+      GHUSER: AllenMGu
+      REPONAME: rustdesk-api
+      GHBEARER: test-only-token
+      ZIP_PASSWORD: test-only-password
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: rdgen/requirements.txt
+
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Check migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Run tests
+        run: python manage.py test

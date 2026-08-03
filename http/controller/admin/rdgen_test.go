@@ -14,13 +14,16 @@ import (
 func TestRdgenAdminProxyAllowsKnownRoute(t *testing.T) {
 	var receivedPath string
 	var receivedToken string
+	var receivedInternalToken string
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedPath = r.URL.RequestURI()
 		receivedToken = r.Header.Get("api-token")
+		receivedInternalToken = r.Header.Get("X-RDGEN-Token")
 		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer backend.Close()
 	t.Setenv("RDGEN_INTERNAL_URL", backend.URL)
+	t.Setenv("RDGEN_INTERNAL_TOKEN", "server-internal-token")
 
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -37,6 +40,7 @@ func TestRdgenAdminProxyAllowsKnownRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	request.Header.Set("api-token", "backend-session")
+	request.Header.Set("X-RDGEN-Token", "attacker-controlled")
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +55,9 @@ func TestRdgenAdminProxyAllowsKnownRoute(t *testing.T) {
 	}
 	if receivedToken != "" {
 		t.Fatal("api-token must not be forwarded to rdgen")
+	}
+	if receivedInternalToken != "server-internal-token" {
+		t.Fatalf("unexpected internal token %q", receivedInternalToken)
 	}
 }
 
