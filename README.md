@@ -304,6 +304,189 @@ https://你的API域名/_admin/
 
 这些路径通过 bind mount 保存在宿主机。更新或重建容器不会删除数据，但不要删除部署目录中的 `data`。
 
+## 从旧 S6 迁移数据库与服务器密钥
+
+本节适用于从来源项目的 `lejianwen/rustdesk-server-s6`，或本仓库旧版
+Full S6 容器，迁移到当前的 `full-s6-generator`。迁移会保留：
+
+- RustDesk Server 的设备数据库与服务器密钥；
+- RustDesk API 的用户、地址簿、设备、审计等 SQLite 数据；
+- 已有客户端对服务器公钥的信任关系。
+
+旧 S6 与当前 Full S6 的路径对应关系如下：
+
+| 旧 S6 容器路径 | 常见旧宿主机目录 | 新 Full S6 宿主机目录 | 内容 |
+| --- | --- | --- | --- |
+| `/data` | `/data/rustdesk/server` | `data/server` | Server 数据 |
+| `/app/data` | `/data/rustdesk/api` | `data/api` | API 数据 |
+
+Server 目录通常包含 `db_v2.sqlite3`、`id_ed25519` 和
+`id_ed25519.pub`；API 目录使用 SQLite 时通常包含 `rustdeskapi.db`。
+
+> 必须同时迁移 `id_ed25519` 和 `id_ed25519.pub`，不要只复制公钥，也不要让新容器重新生成密钥。更换服务器密钥后，原客户端保存的公钥将不再匹配。
+
+### 1. 确认旧容器和真实挂载目录
+
+先查看旧容器名称：
+
+```bash
+podman ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+```
+
+将下面变量改成旧 S6 容器的实际名称，然后查看挂载关系：
+
+```bash
+old_s6_container=替换为旧S6容器名
+
+podman inspect "$old_s6_container" \
+  --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
+```
+
+找到容器内 `/data` 和 `/app/data` 对应的宿主机来源目录。如果旧部署把
+Server 与 API 分成两个容器，分别检查两个容器，并在迁移时同时停止它们。
+
+下面示例使用来源项目文档中的常见目录；若 `podman inspect` 显示不同路径，
+必须按实际结果修改：
+
+```bash
+old_server_data=/data/rustdesk/server
+old_api_data=/data/rustdesk/api
+full_s6_root=/opt/rustdesk-full-s6-generator
+
+test -d "$old_server_data"
+test -s "$old_server_data/id_ed25519"
+test -s "$old_server_data/id_ed25519.pub"
+test -d "$old_api_data"
+
+find "$old_server_data" -maxdepth 1 -type f -printf '%f\n' | sort
+find "$old_api_data" -maxdepth 1 -type f -printf '%f\n' | sort
+```
+
+旧 API 使用 SQLite 时，通常会看到 `rustdeskapi.db`。若旧 API 使用 MySQL
+或 PostgreSQL，应使用对应数据库的备份和恢复工具；不要把空的
+`/app/data` 目录当作业务数据库迁移。
+
+### 2. 停止旧服务并创建可恢复备份
+
+SQLite 复制前必须停止写入，不能在旧容器运行期间直接复制数据库：
+
+```bash
+podman stop "$old_s6_container"
+sync
+
+migration_stamp="$(date +%Y%m%d-%H%M%S)"
+migration_backup="${full_s6_root}/migration-backup-${migration_stamp}"
+install -d -m 700 "$migration_backup"
+
+tar -C "$old_server_data" -cpf "$migration_backup/server.tar" .
+tar -C "$old_api_data" -cpf "$migration_backup/api.tar" .
+
+sha256sum "$old_server_data/id_ed25519" \
+  "$old_server_data/id_ed25519.pub" \
+  | tee "$migration_backup/server-key.sha256"
+```
+
+如果 Server 与 API 使用两个旧容器，应先停止两个容器再执行备份。备份完成
+前不要删除旧容器、旧目录或旧卷。
+
+### 3. 将旧数据复制到 Full S6
+
+先停止可能已经试运行过的新容器：
+
+```bash
+podman stop rustdesk-full-s6-generator 2>/dev/null || true
+
+cd "$full_s6_root"
+install -d -m 700 data/server data/api
+```
+
+为避免覆盖新容器已经创建的数据，目标目录必须为空：
+
+```bash
+for target_dir in data/server data/api; do
+  if [ -n "$(find "$target_dir" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+    echo "目标目录非空，停止迁移：$target_dir" >&2
+    exit 1
+  fi
+done
+```
+
+确认输出中没有报错后复制整个目录，而不是只挑选数据库文件：
+
+```bash
+cp -a "$old_server_data"/. data/server/
+cp -a "$old_api_data"/. data/api/
+
+chmod 600 data/server/id_ed25519
+chmod 644 data/server/id_ed25519.pub
+
+cmp "$old_server_data/id_ed25519" data/server/id_ed25519
+cmp "$old_server_data/id_ed25519.pub" data/server/id_ed25519.pub
+```
+
+`cmp` 没有输出且返回码为 `0`，表示迁移前后的私钥和公钥完全一致。
+Compose 中的 `:Z` 会在 Podman 启动时为新目录设置 SELinux 标签。
+
+### 4. 合并旧配置并启动
+
+不要直接用旧 `.env` 或旧 Compose 覆盖当前文件。将旧部署中的网络、登录、
+LDAP/OAuth、JWT、外部数据库等配置逐项合并到当前配置，并按本 README 的
+[配置 `.env`](#4-配置-env)章节补齐以下生成器变量：
+
+```env
+RDGEN_SECRET_KEY=新的独立随机值
+RDGEN_INTERNAL_TOKEN=新的独立随机值
+RDGEN_GITHUB_TOKEN=当前仓库的Fine-grained-Token
+RDGEN_ZIP_PASSWORD=与Actions中ZIP_PASSWORD相同的值
+```
+
+`RDGEN_SECRET_KEY` 和 `RDGEN_INTERNAL_TOKEN` 是新增配置，不是旧 RustDesk
+服务器密钥；不能用 `id_ed25519`、GitHub Token 或 ZIP 密码代替。
+
+验证 Compose 并启动：
+
+```bash
+cd "$full_s6_root"
+
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  config >/dev/null
+
+podman-compose \
+  -f docker-compose.full-s6-generator.yaml \
+  up -d
+```
+
+### 5. 验证迁移结果
+
+```bash
+podman ps --filter name=rustdesk-full-s6-generator
+
+podman exec rustdesk-full-s6-generator \
+  sh -c 'test -s /data/id_ed25519 && test -s /data/id_ed25519.pub'
+
+podman logs --since 10m \
+  rustdesk-full-s6-generator 2>&1 | tail -n 200
+```
+
+还应实际确认：
+
+1. 原 API 管理员账户可以登录；
+2. 原用户、设备和地址簿仍然存在；
+3. 原 RustDesk 客户端无需修改公钥即可连接；
+4. 新建一个 RDGEN 测试任务，Artifact 能下载到 `data/rdgen/exe`。
+
+宿主机已安装 `sqlite3` 时，可额外执行一致性检查：
+
+```bash
+sqlite3 data/server/db_v2.sqlite3 'PRAGMA integrity_check;'
+sqlite3 data/api/rustdeskapi.db 'PRAGMA integrity_check;'
+```
+
+正常结果均为 `ok`。确认所有功能正常并完成独立备份前，继续保留旧容器和旧
+数据。若需要回滚，停止 `rustdesk-full-s6-generator`，重新启动旧 S6 容器即可；
+本迁移过程不会修改旧数据目录。
+
 ## 更新 Full S6 镜像
 
 确认没有正在生成的客户端后执行：
