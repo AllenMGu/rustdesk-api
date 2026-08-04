@@ -33,3 +33,7 @@ export function getArtifacts() {
 export function downloadArtifact(params) {
   return rdgen.get('/download', { params, responseType: 'blob' })
 }
+
+export function deleteArtifactBuild(params) {
+  return rdgen.delete('/delete_artifact_build', { params })
+}
