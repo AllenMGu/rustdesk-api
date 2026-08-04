@@ -348,6 +348,7 @@ jobs:
           provenance: false
           build-args: |
             BUILDARCH=${{ matrix.job.platform }}
+            WEBCLIENT_REPOSITORY=${{ env.WEBCLIENT_SOURCE_LOCATION }}
             RDGEN_REPOSITORY=${{ env.RDGEN_REPOSITORY }}
             RDGEN_REF=${{ env.RDGEN_REF }}
           tags: |
@@ -396,6 +397,7 @@ jobs:
           provenance: false
           build-args: |
             BUILDARCH=${{ matrix.job.platform }}
+            WEBCLIENT_REPOSITORY=${{ env.WEBCLIENT_SOURCE_LOCATION }}
             RDGEN_REPOSITORY=${{ env.RDGEN_REPOSITORY }}
             RDGEN_REF=${{ env.RDGEN_REF }}
           tags: |

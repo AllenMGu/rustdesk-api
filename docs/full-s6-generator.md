@@ -1,12 +1,18 @@
 # Full S6 image with RustDesk client generator
 
 `Dockerfile_full_s6_generator` adds the
-[AllenMGu/rdgen](https://github.com/AllenMGu/rdgen) web generator to the full
-S6 image. A single container runs:
+[AllenMGu/rdgen](https://github.com/AllenMGu/rdgen) generator to RustDesk API
+Web. It is a single authenticated administration interface, not two separate
+websites. A single container runs:
 
 - `hbbs` and `hbbr`
 - RustDesk API on port `21114`
-- rdgen on port `8000`
+- the internal rdgen service on port `8000`
+
+Administrators open RustDesk API Web on port `21114` and select
+`系统管理 -> 客户端生成器`. The page, build status, saved artifacts, and
+downloads all use the existing API Web login. Port `8000` is bound to localhost
+only for diagnostics and is not a user-facing frontend.
 
 The container does not compile Windows programs locally. rdgen sends an
 encrypted configuration to GitHub and dispatches the generator workflow in
@@ -19,7 +25,8 @@ the installer back to rdgen in this S6 container.
 Add these Actions repository secrets to `AllenMGu/rdgen`:
 
 - `ZIP_PASSWORD`: the same value as `RDGEN_ZIP_PASSWORD`
-- `GENURL`: the same HTTPS URL as `RDGEN_PUBLIC_URL`
+- `GENURL`: the same HTTPS callback prefix as `RDGEN_PUBLIC_URL`, including
+  the `/rdgen` suffix
 
 Optional signing secrets used by the existing workflows can be configured
 separately.
@@ -53,10 +60,20 @@ Its bind mounts use the SELinux private relabel option (`:Z`), allowing the
 RustDesk server, API SQLite database, and rdgen to write to their persistent
 directories on enforcing Podman hosts.
 
-The compose example binds rdgen to `127.0.0.1:8000`. Put an HTTPS reverse
-proxy in front of it and use that public URL for both `RDGEN_PUBLIC_URL` and
-the `GENURL` Actions secret. GitHub runners must be able to fetch encrypted
-inputs and upload completed installers to this URL.
+The compose example binds the internal rdgen service to `127.0.0.1:8000`.
+Put an HTTPS reverse proxy in front of RustDesk API on port `21114`. Use the
+same public site plus `/rdgen` for both `RDGEN_PUBLIC_URL` and the `GENURL`
+Actions secret, for example:
+
+```text
+API Web:           https://rustdesk.example.com
+RDGEN_PUBLIC_URL:  https://rustdesk.example.com/rdgen
+```
+
+GitHub runners must be able to reach the `/rdgen` callback prefix to fetch
+encrypted inputs and upload completed installers. The Go API exposes only the
+specific callback routes needed by the workflows; generator administration
+and downloads remain protected by the existing API Web administrator login.
 
 Allow large request bodies at the reverse proxy. For Nginx, the rdgen location
 should include settings similar to:
@@ -75,15 +92,36 @@ Persistent state is stored below `./data`:
 - `rdgen/exe`: completed clients returned by GitHub Actions
 - `rdgen/png` and `rdgen/temp-zips`: build images and temporary encrypted input
 
+Deployment-specific client defaults are also stored on the host rather than
+in the public repository. Create the file before starting the container:
+
+```sh
+mkdir -p data/api
+cp config/rdgen-client-defaults.example.json \
+  data/api/rdgen-client-defaults.json
+chmod 600 data/api/rdgen-client-defaults.json
+```
+
+Edit `data/api/rdgen-client-defaults.json` and place the desired server
+address, API URL, executable name, application name, company name, and other
+supported generator fields there. The frontend falls back to the hostname and
+origin currently used to open API Web when this file is absent.
+
+Do not put `permanentPassword`, `unlockPin`, `csrfmiddlewaretoken`, or
+`sh_secret_field` in this file; the API removes these fields before returning
+defaults to the browser. Set the default permanent password only through
+`RDGEN_DEFAULT_PERMANENT_PASSWORD` in `.env`. Saved browser configuration
+files also omit password and PIN values.
+
 Completed files remain on the S6 host at:
 
 ```text
 ./data/rdgen/exe/<build-uuid>/<generated-file>
 ```
 
-Open `<RDGEN_PUBLIC_URL>/artifacts` to list and download all saved
-clients. The files are not automatically deleted and survive container image
-updates because this path is a bind mount.
+Open RustDesk API Web and select `系统管理 -> 客户端生成器` to list and
+download all saved clients. The files are not automatically deleted and
+survive container image updates because this path is a bind mount.
 
 At startup, the container copies only the server's public
 `/data/id_ed25519.pub` into rdgen's readable data directory. If a JSON preset
@@ -117,9 +155,9 @@ leave `SKIP_GHCR=false`. The resulting image is
 
 - Do not place GitHub tokens, passwords, private keys, or permanent RustDesk
   passwords in the Dockerfile, compose file, or Git repository.
-- Keep the generator behind authentication or a trusted network boundary.
-- Protect `/artifacts` and `/download` with the same reverse-proxy
-  authentication as the generator UI.
+- Generator creation, artifact listing, and downloads require an authenticated
+  RustDesk API Web administrator.
+- Do not publish port `8000`; the compose file binds it to localhost only.
 - Use HTTPS for both the RustDesk API and generator callback URL.
 - For this integrated image, an empty `RS_PUB_KEY` is filled from the local
   server's `id_ed25519.pub`. Standalone rdgen deployments still need either
