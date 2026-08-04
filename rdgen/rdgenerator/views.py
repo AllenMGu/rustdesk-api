@@ -272,15 +272,6 @@ def generator_view(request):
                 _settings.SH_SECRET, user_secret
             )
             platform = cleaned_data['platform']
-            if platform not in {"windows", "windows-x86"}:
-                message = (
-                    "The S6 artifact-pull workflow currently supports "
-                    "Windows EXE/MSI builds only."
-                )
-                if is_json:
-                    return JsonResponse({"error": message}, status=400)
-                form.add_error("platform", message)
-                return render(request, "generator.html", {"form": form}, status=400)
             version = cleaned_data['version']
             server = cleaned_data['serverIP']
             key = cleaned_data['RS_PUB_KEY'] or cleaned_data['key']
