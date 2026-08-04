@@ -67,15 +67,20 @@ ldap:
   tls-ca-file: ""
   tls-verify: false
   base-dn: "dc=example,dc=com"
-  bind-dn: "cn=admin,dc=example,dc=com"
-  bind-password: "password"
+  bind-dn: ""
+  bind-password: ""
+  connect-timeout: 5s
+  operation-timeout: 10s
+  nested-groups: false
+  # When LDAP is unavailable, only a local administrator may use its local password.
+  emergency-local-admin: true
 
   user:
     base-dn: "ou=users,dc=example,dc=com"
     enable-attr: ""       #The attribute name of the user for enabling, in AD it is "userAccountControl", empty means no enable attribute, all users are enabled
     enable-attr-value: "" # The value of the enable attribute when the user is enabled. If you are using AD, just set random value, it will be ignored.
     filter: "(cn=*)"
-    username: "uid"       # The attribute name of the user for usernamem if you are using AD, it should be "sAMAccountName"
+    username: "uid"       # Comma-separated login attributes are supported, e.g. "sAMAccountName,userPrincipalName" for AD.
     email: "mail"
     first-name: "givenName"
     last-name: "sn"

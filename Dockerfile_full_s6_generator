@@ -15,9 +15,14 @@ COPY docker/full-s6-generator/web-overrides/ /tmp/web-overrides/
 
 RUN mkdir -p \
       /opt/rustdesk-api-web/src/api \
+      /opt/rustdesk-api-web/src/views/ldap \
       /opt/rustdesk-api-web/src/views/rdgen \
+    && cp /tmp/web-overrides/src/api/ldap.js \
+      /opt/rustdesk-api-web/src/api/ldap.js \
     && cp /tmp/web-overrides/src/api/rdgen.js \
       /opt/rustdesk-api-web/src/api/rdgen.js \
+    && cp /tmp/web-overrides/src/views/ldap/index.vue \
+      /opt/rustdesk-api-web/src/views/ldap/index.vue \
     && cp /tmp/web-overrides/src/views/rdgen/index.vue \
       /opt/rustdesk-api-web/src/views/rdgen/index.vue \
     && node /tmp/web-overrides/patch-router.mjs \

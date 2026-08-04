@@ -4,6 +4,10 @@ services:
     container_name: rustdesk-full-s6-generator
     restart: unless-stopped
     network_mode: host
+    # Pass optional RUSTDESK_API_LDAP_* variables through as real container
+    # environment overrides. Only variables present in .env lock UI fields.
+    env_file:
+      - .env
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       RELAY: ${RUSTDESK_HOST:?Set RUSTDESK_HOST}:21117
@@ -15,6 +19,8 @@ services:
       RUSTDESK_API_RUSTDESK_RELAY_SERVER: ${RUSTDESK_HOST}:21117
       RUSTDESK_API_RUSTDESK_API_SERVER: ${RUSTDESK_API_PUBLIC_URL:?Set RUSTDESK_API_PUBLIC_URL}
       RUSTDESK_API_RUSTDESK_KEY_FILE: /data/id_ed25519.pub
+      RUSTDESK_API_SETTINGS_KEY: ${RUSTDESK_API_SETTINGS_KEY:-}
+      RUSTDESK_API_LDAP_SETTINGS_FILE: /app/data/ldap-settings.json
 
       SECRET_KEY: ${RDGEN_SECRET_KEY:?Set RDGEN_SECRET_KEY}
       RDGEN_INTERNAL_TOKEN: ${RDGEN_INTERNAL_TOKEN:?Set RDGEN_INTERNAL_TOKEN}

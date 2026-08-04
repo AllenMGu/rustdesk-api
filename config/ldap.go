@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 type LdapUser struct {
 	BaseDn          string `mapstructure:"base-dn"`           // The base DN of the user for searching
 	EnableAttr      string `mapstructure:"enable-attr"`       // The attribute name of the user for enabling, in AD it is "userAccountControl", empty means no enable attribute, all users are enabled
@@ -25,13 +27,17 @@ type LdapUser struct {
 // }
 
 type Ldap struct {
-	Enable       bool     `mapstructure:"enable"`
-	Url          string   `mapstructure:"url"`
-	TlsCaFile    string   `mapstructure:"tls-ca-file"`
-	TlsVerify    bool     `mapstructure:"tls-verify"`
-	BaseDn       string   `mapstructure:"base-dn"`
-	BindDn       string   `mapstructure:"bind-dn"`
-	BindPassword string   `mapstructure:"bind-password"`
-	User         LdapUser `mapstructure:"user"`
+	Enable              bool          `mapstructure:"enable"`
+	Url                 string        `mapstructure:"url"`
+	TlsCaFile           string        `mapstructure:"tls-ca-file"`
+	TlsVerify           bool          `mapstructure:"tls-verify"`
+	BaseDn              string        `mapstructure:"base-dn"`
+	BindDn              string        `mapstructure:"bind-dn"`
+	BindPassword        string        `mapstructure:"bind-password"`
+	ConnectTimeout      time.Duration `mapstructure:"connect-timeout"`
+	OperationTimeout    time.Duration `mapstructure:"operation-timeout"`
+	NestedGroups        bool          `mapstructure:"nested-groups"`
+	EmergencyLocalAdmin bool          `mapstructure:"emergency-local-admin"`
+	User                LdapUser      `mapstructure:"user"`
 	// Group        LdapGroup `mapstructure:"group"`
 }

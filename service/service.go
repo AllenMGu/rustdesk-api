@@ -48,7 +48,9 @@ func New(c *config.Config, g *gorm.DB, l *log.Logger, j *jwt.Jwt, lo lock.Locker
 	Logger = l
 	Jwt = j
 	Lock = lo
-	AllService = new(Service)
+	AllService = &Service{
+		LdapService: NewLdapService(c.Ldap, l),
+	}
 	return AllService
 }
 
