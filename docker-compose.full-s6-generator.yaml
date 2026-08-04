@@ -1,0 +1,47 @@
+services:
+  rustdesk:
+    image: ghcr.io/allenmgu/rustdesk-api:full-s6-generator
+    container_name: rustdesk-full-s6-generator
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      RELAY: ${RUSTDESK_HOST:?Set RUSTDESK_HOST}:21117
+      ENCRYPTED_ONLY: ${ENCRYPTED_ONLY:-0}
+
+      RUSTDESK_API_LANG: ${RUSTDESK_API_LANG:-zh-CN}
+      RUSTDESK_API_RUSTDESK_ID_SERVER: ${RUSTDESK_HOST}:21116
+      RUSTDESK_API_RUSTDESK_RELAY_SERVER: ${RUSTDESK_HOST}:21117
+      RUSTDESK_API_RUSTDESK_API_SERVER: ${RUSTDESK_API_PUBLIC_URL:?Set RUSTDESK_API_PUBLIC_URL}
+      RUSTDESK_API_RUSTDESK_KEY_FILE: /data/id_ed25519.pub
+
+      SECRET_KEY: ${RDGEN_SECRET_KEY:?Set RDGEN_SECRET_KEY}
+      GHUSER: ${RDGEN_GITHUB_USER:-AllenMGu}
+      GHBEARER: ${RDGEN_GITHUB_TOKEN:?Set RDGEN_GITHUB_TOKEN}
+      GENURL: ${RDGEN_PUBLIC_URL:?Set RDGEN_PUBLIC_URL}
+      ZIP_PASSWORD: ${RDGEN_ZIP_PASSWORD:?Set RDGEN_ZIP_PASSWORD}
+      GHBRANCH: ${RDGEN_GITHUB_BRANCH:-master}
+      REPONAME: ${RDGEN_GITHUB_REPOSITORY:-rdgen}
+      SH_SECRET: ${RDGEN_SELF_HOST_SECRET:?Set RDGEN_SELF_HOST_SECRET}
+      PROTOCOL: https
+      RUSTDESK_REPOSITORY: ${RUSTDESK_SOURCE_REPOSITORY:-AllenMGu/rustdesk}
+      RUSTDESK_REF: ${RUSTDESK_SOURCE_REF:-master}
+      RUSTDESK_PUBLIC_KEY_FILE: /opt/rdgen/data/server-public-key
+      RDGEN_WORKERS: ${RDGEN_WORKERS:-2}
+      RDGEN_THREADS: ${RDGEN_THREADS:-4}
+    ports:
+      - "21114:21114"
+      - "21115:21115"
+      - "21116:21116"
+      - "21116:21116/udp"
+      - "21117:21117"
+      - "21118:21118"
+      - "21119:21119"
+      # Publish rdgen through an HTTPS reverse proxy on this host.
+      - "127.0.0.1:${RDGEN_PORT:-8000}:8000"
+    volumes:
+      - ./data/server:/data
+      - ./data/api:/app/data
+      - ./data/rdgen/database:/opt/rdgen/data
+      - ./data/rdgen/exe:/opt/rdgen/exe
+      - ./data/rdgen/png:/opt/rdgen/png
+      - ./data/rdgen/temp-zips:/opt/rdgen/temp_zips
