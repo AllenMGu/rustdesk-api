@@ -87,6 +87,12 @@ func proxyRdgen(c *gin.Context, targetPath string) {
 		req.URL.RawPath = ""
 		req.Host = target.Host
 		req.Header.Del("api-token")
+		req.Header.Del("Authorization")
+		req.Header.Del("Cookie")
+		req.Header.Del("X-RDGEN-Token")
+		if internalToken := strings.TrimSpace(os.Getenv("RDGEN_INTERNAL_TOKEN")); internalToken != "" {
+			req.Header.Set("X-RDGEN-Token", internalToken)
+		}
 		req.Header.Set("X-Forwarded-Host", c.Request.Host)
 		req.Header.Set("X-Forwarded-Proto", proto)
 	}
