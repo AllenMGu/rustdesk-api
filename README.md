@@ -224,7 +224,7 @@
 
 2. 使用`docker compose`，参考[WIKI](https://github.com/lejianwen/rustdesk-api/wiki)
 
-3. 如需在同一 Full S6 容器中运行 RustDesk 服务、API 和 Windows 客户端生成器，
+3. 如需在同一 Full S6 容器中运行 RustDesk 服务、API 和多平台客户端生成器，
    使用 `full-s6-generator` 镜像：
 
    ```bash
@@ -238,20 +238,20 @@
 
    1. S6 服务器将加密配置上传为 GitHub Git blob，并触发
       当前 `AllenMGu/rustdesk-api` 仓库内的 RDGen GitHub Actions。
-   2. GitHub Actions 编译 Windows EXE/MSI，并上传名为
-      `rdgen-<构建UUID>` 的 Artifact。
+   2. GitHub Actions 编译所选 Windows、Linux、Android 或 macOS 客户端，并
+      上传名为 `rdgen-<构建UUID>` 或 `rdgen-<构建UUID>-<目标>` 的 Artifact。
    3. S6 中的 `rdgen-poller` 服务默认每 60 秒查询一次运行状态。
    4. 编译成功后，S6 主动下载对应 Artifact，并保存到：
 
       ```text
       ./data/rdgen/exe/<构建UUID>/<生成文件>
       ```
-   5. S6 只有在验证所需 EXE/MSI 均已完整保存后，才会删除该次
+   5. S6 只有在验证该平台所需产物均已完整保存后，才会删除该次
       GitHub Actions 运行的全部 Artifact。下载失败会保留 GitHub
       Artifact，供下一轮查询重试。
 
-   此流程不需要公网 IP、入站 NAT、GitHub 回调地址或 Windows
-   self-hosted runner；S6 服务器只需能够主动访问 GitHub HTTPS。
+   此流程不需要公网 IP、入站 NAT、GitHub 回调地址或 self-hosted
+   runner；S6 服务器只需能够主动访问 GitHub HTTPS。
 
    `AllenMGu/rustdesk-api` 仓库需配置 Actions Secret：
 
@@ -289,7 +289,7 @@
    | `RUSTDESK_SOURCE_REF` | 固定源码分支、标签或提交；非空时覆盖页面版本选择 | `master` |
 
    `data/rdgen/exe` 使用宿主机 bind mount，更新容器镜像后生成的
-   EXE/MSI 文件仍会保留。管理员可在“客户端生成器”页面删除某个任务
+   各平台安装包仍会保留。管理员可在“客户端生成器”页面删除某个任务
    的整组安装包；此操作只删除 S6 服务器本地文件。
 
    若希望页面的 RustDesk 版本选择直接切换官方标签，请设置
