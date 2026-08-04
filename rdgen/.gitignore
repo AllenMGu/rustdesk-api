@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+db.sqlite3
+gunicorn.conf
+.venv
+.env
+.env.*
+data/
+exe/
+media/
+png/
+temp_zips/

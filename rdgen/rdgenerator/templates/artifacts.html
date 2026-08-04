@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Saved RustDesk Clients</title>
+    <style>
+        body {
+            max-width: 960px;
+            margin: 40px auto;
+            padding: 0 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f5f7fa;
+            color: #1f2937;
+        }
+        .build {
+            margin: 18px 0;
+            padding: 18px;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        }
+        .artifact {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 10px 0;
+            border-top: 1px solid #e5e7eb;
+        }
+        a { color: #1769e0; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .meta { color: #6b7280; white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <h1>Saved RustDesk Clients</h1>
+    <p><a href="/">Create another client</a></p>
+    {% for build in builds %}
+        <section class="build">
+            <h2>Build {{ build.uuid }}</h2>
+            {% for artifact in build.artifacts %}
+                <div class="artifact">
+                    <a href="/download?uuid={{ build.uuid }}&filename={{ artifact.name|urlencode }}">
+                        {{ artifact.name }}
+                    </a>
+                    <span class="meta">{{ artifact.size|filesizeformat }}</span>
+                </div>
+            {% endfor %}
+        </section>
+    {% empty %}
+        <p>No generated clients have been uploaded yet.</p>
+    {% endfor %}
+</body>
+</html>
