@@ -1,0 +1,9 @@
+{
+  "platform": "windows",
+  "version": "1.4.9",
+  "exename": "rustdesk",
+  "appname": "RustDesk",
+  "serverIP": "rustdesk.example.com",
+  "apiServer": "https://rustdesk.example.com",
+  "compname": "Example Company"
+}
