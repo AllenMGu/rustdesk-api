@@ -13,7 +13,13 @@ from django.utils import timezone
 
 from .custom_config import build_custom_config
 from .forms import GenerateForm
-from .github_artifacts import COMPLETION_MARKER, _delete_artifact, sync_github_run
+from .github_artifacts import (
+    COMPLETION_MARKER,
+    _delete_artifact,
+    _required_output_names,
+    _valid_output_for_run,
+    sync_github_run,
+)
 from .models import GithubRun
 from .views import (
     _apply_default_permanent_password,
@@ -258,6 +264,59 @@ class CustomConfigTests(SimpleTestCase):
         self.assertEqual("balanced", defaults["image-quality"])
         self.assertEqual("30", defaults["custom-fps"])
         self.assertEqual("custom-value", defaults["custom-setting"])
+
+
+class GeneratorPlatformDispatchTests(TestCase):
+    @override_settings(
+        GHUSER="AllenMGu",
+        REPONAME="rustdesk-api",
+        GHBRANCH="master",
+        GHBEARER="test-token",
+        ZIP_PASSWORD="test-zip-password",
+        RDGEN_INTERNAL_TOKEN="",
+    )
+    @patch("rdgenerator.views.requests.post")
+    @patch("rdgenerator.views._upload_input_blob")
+    def test_dispatches_android_through_the_monorepo_workflow(
+        self,
+        upload_input_blob,
+        post,
+    ):
+        upload_input_blob.return_value = "a" * 40
+        response = Mock(status_code=200)
+        response.json.return_value = {
+            "workflow_run_id": 12345,
+            "html_url": "https://github.test/actions/runs/12345",
+        }
+        post.return_value = response
+
+        result = self.client.post(
+            "/generator",
+            data=json.dumps(
+                {
+                    "platform": "android",
+                    "version": "1.4.9",
+                    "exename": "ExampleRustDesk",
+                    "appname": "ExampleRustDesk",
+                    "direction": "both",
+                    "installation": "installationY",
+                    "settings": "settingsY",
+                    "theme": "system",
+                    "themeDorO": "default",
+                    "passApproveMode": "password-click",
+                    "permissionsType": "custom",
+                    "image_quality": "balanced",
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(202, result.status_code, result.content)
+        self.assertEqual("android", GithubRun.objects.get().platform)
+        request = post.call_args
+        self.assertIn("generator-android.yml/dispatches", request.args[0])
+        self.assertEqual("a" * 40, request.kwargs["json"]["inputs"]["input_blob_sha"])
+        self.assertTrue(request.kwargs["json"]["inputs"]["build_uuid"])
 
 
 class ArtifactStorageTests(SimpleTestCase):
@@ -524,6 +583,89 @@ class GitHubArtifactPollingTests(TestCase):
         self.assertEqual("success", github_run.status)
         delete_artifact.assert_has_calls(
             [call(98763), call(98764), call(98765)]
+        )
+
+    def test_defines_platform_specific_output_sets(self):
+        github_run = GithubRun(
+            uuid=self.build_id,
+            platform="android",
+            filename="ExampleRustDesk",
+        )
+        self.assertEqual(
+            {
+                "ExampleRustDesk-aarch64.apk",
+                "ExampleRustDesk-armv7.apk",
+                "ExampleRustDesk-x86_64.apk",
+            },
+            _required_output_names(github_run),
+        )
+        self.assertTrue(
+            _valid_output_for_run("ExampleRustDesk-aarch64.apk", github_run)
+        )
+        self.assertFalse(
+            _valid_output_for_run("DifferentClient-aarch64.apk", github_run)
+        )
+
+    @override_settings(
+        GHUSER="AllenMGu",
+        REPONAME="rustdesk-api",
+        GHBEARER="test-token",
+    )
+    @patch("rdgenerator.github_artifacts._delete_artifact")
+    @patch("rdgenerator.github_artifacts.requests.get")
+    @patch("rdgenerator.github_artifacts._request_json")
+    def test_combines_multiple_android_artifacts(
+        self,
+        request_json,
+        get,
+        delete_artifact,
+    ):
+        responses = []
+        artifacts = []
+        for index, arch in enumerate(("aarch64", "armv7", "x86_64"), start=1):
+            archive = io.BytesIO()
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr(f"ExampleRustDesk-{arch}.apk", arch.encode())
+            response = Mock()
+            response.iter_content.return_value = [archive.getvalue()]
+            response.raise_for_status.return_value = None
+            responses.append(response)
+            artifacts.append(
+                {
+                    "id": 99000 + index,
+                    "name": f"rdgen-{self.build_id}-android-{arch}",
+                    "expired": False,
+                    "archive_download_url": f"https://api.github.test/{arch}.zip",
+                }
+            )
+
+        get.side_effect = responses
+        request_json.side_effect = [
+            {"status": "completed", "conclusion": "success"},
+            {"artifacts": artifacts},
+        ]
+        github_run = GithubRun.objects.create(
+            uuid=self.build_id,
+            status="in_progress",
+            github_run_id=12346,
+            platform="android",
+            filename="ExampleRustDesk",
+        )
+
+        with TemporaryDirectory() as artifact_root, override_settings(
+            ARTIFACT_ROOT=Path(artifact_root)
+        ):
+            self.assertTrue(sync_github_run(github_run))
+            destination = Path(artifact_root) / self.build_id
+            for arch in ("aarch64", "armv7", "x86_64"):
+                self.assertEqual(
+                    arch.encode(),
+                    (destination / f"ExampleRustDesk-{arch}.apk").read_bytes(),
+                )
+
+        self.assertEqual(3, get.call_count)
+        delete_artifact.assert_has_calls(
+            [call(99001), call(99002), call(99003)]
         )
 
     @override_settings(
