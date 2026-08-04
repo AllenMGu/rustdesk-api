@@ -274,6 +274,7 @@
    | `ENCRYPTED_ONLY` | RustDesk 服务是否只接受加密连接 | `0` |
    | `MUST_LOGIN` | RustDesk 客户端是否必须登录后使用 | `N` |
    | `RDGEN_SECRET_KEY` | Django 服务随机密钥，可用 `openssl rand -hex 32` 生成 | 必填 |
+   | `RDGEN_INTERNAL_TOKEN` | API 反向代理访问内部生成器的独立随机令牌 | 必填 |
    | `RDGEN_GITHUB_USER` | rdgen 仓库所有者 | `AllenMGu` |
    | `RDGEN_GITHUB_REPOSITORY` | rdgen 仓库名称，不含所有者 | `rdgen` |
    | `RDGEN_GITHUB_BRANCH` | 触发工作流的 rdgen 分支 | `master` |
