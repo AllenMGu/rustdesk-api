@@ -38,7 +38,7 @@ desktop software that provides self-hosted solutions.
     - Tag Management
     - Group Management
     - OAuth Management
-    - LDAP Config by config file or ENV
+    - LDAP/Active Directory configuration, connection testing, and rollback in the administrator UI
     - Login Logs
     - Connection Logs
     - File Transfer Logs
@@ -120,7 +120,7 @@ displaying data.Frontend code is available at [rustdesk-api-web](https://github.
     * Custom commands can be added
     * Custom commands can be executed
 
-11. **LDAP Support**, When you setup the LDAP(test for OpenLDAP and AD), you can login with the LDAP's user. https://github.com/lejianwen/rustdesk-api/issues/114 , if LDAP fail fallback local user
+11. **LDAP Support**: LDAP and Active Directory users can log in after an administrator configures the service. Saved settings are applied immediately, the bind password is encrypted with `RUSTDESK_API_SETTINGS_KEY`, environment-owned fields remain read-only, and user-supplied LDAP filter values are escaped. LDAP failures never fall back to ordinary same-name local users; an explicitly enabled local administrator remains available as a break-glass account.
   
 ### Web Client:
 

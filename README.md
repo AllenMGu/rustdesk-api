@@ -47,7 +47,8 @@ flowchart TD
 - RustDesk 客户端登录、个人地址簿、共享地址簿、群组和标签。
 - 用户、设备、地址簿、群组和 OAuth 管理。
 - 登录日志、连接日志和文件传输日志。
-- LDAP 登录，已用于 Active Directory 和 OpenLDAP 场景；LDAP 验证失败时可回退到本地用户。
+- LDAP 登录，支持 Active Directory、OpenLDAP、嵌套组、双登录属性和用户信息同步。
+- LDAP 认证失败时不会回退普通同名本地账户；可保留本地管理员作为应急入口。
 - GitHub、Google 和通用 OIDC 登录。
 - Web Client 自动获取 API、ID Server、Relay Server、公钥和地址簿。
 - 管理员临时分享 Web Client 连接。
@@ -63,6 +64,45 @@ flowchart TD
 - GitHub Actions 不回连 S6；服务器主动查询、下载和验证 Artifact。
 - 无需 `GENURL`、公网回调地址、入站 NAT 或 self-hosted runner。
 - 支持配置自定义服务器、API 地址、公钥、应用名称、公司名称、文件名、图标、Logo 和永久密码等参数。
+
+### LDAP / Active Directory 管理
+
+管理员可在 `系统管理 → LDAP / Active Directory` 完成 LDAP 启停、连接配置、
+用户属性、允许登录组、管理员组、嵌套组、TLS 验证、连接测试、测试用户和配置回滚。
+页面内置通用 Active Directory 示例模板，但不会保存或预填 Bind 密码。
+
+页面保存的配置立即生效并持久化到：
+
+```text
+宿主机：./data/api/ldap-settings.json
+容器内：/app/data/ldap-settings.json
+```
+
+配置优先级为：
+
+```text
+环境变量 > 页面保存配置 > conf/config.yaml
+```
+
+被环境变量控制的字段会在页面显示为只读。Bind 密码使用
+`RUSTDESK_API_SETTINGS_KEY` 通过 AES-GCM 加密后保存，API 响应和日志均不回显密码。
+请在首次通过页面保存密码前生成并配置该密钥：
+
+```bash
+openssl rand -hex 32
+```
+
+密钥必须长期保持不变，并随 `.env` 一起备份；密钥丢失后无法解密已保存的 Bind 密码。
+LDAP 查询会转义用户输入并限制连接、Bind 和搜索超时。用户名属性可使用英文逗号分隔，
+例如 `sAMAccountName,userPrincipalName`，以同时支持裸用户名和 UPN。
+
+如需用环境变量强制某个 LDAP 字段，可在 `.env` 中增加对应的
+`RUSTDESK_API_LDAP_*` 变量；Compose 会将实际存在的变量传入容器。不要预先写入空变量，
+因为只要变量存在，该字段就会被视为环境变量锁定。
+
+如果 LDAP 配置错误导致无法新登录，可先在 `.env` 中临时加入
+`RUSTDESK_API_LDAP_ENABLE=false` 并重启容器，使用本地管理员修正页面配置后再移除该变量。
+已有管理员会话未过期时，也可以直接使用页面的“恢复上一次配置”。
 
 ## 支持的客户端
 
@@ -117,15 +157,16 @@ cp .env.full-s6-generator.example .env
 chmod 600 .env
 ```
 
-生成两个不同的内部随机密钥：
+生成三个不同的内部随机密钥：
 
 ```bash
 openssl rand -hex 32
 openssl rand -hex 32
+openssl rand -hex 32
 ```
 
-将两个输出分别写入 `RDGEN_SECRET_KEY` 和 `RDGEN_INTERNAL_TOKEN`。
-二者必须不同，也不能使用 GitHub Token 或 ZIP 密码代替。
+将三个输出分别写入 `RDGEN_SECRET_KEY`、`RDGEN_INTERNAL_TOKEN` 和
+`RUSTDESK_API_SETTINGS_KEY`。三个密钥必须不同，也不能使用 GitHub Token 或 ZIP 密码代替。
 
 ### 4. 配置 `.env`
 
@@ -139,6 +180,8 @@ RUSTDESK_API_PUBLIC_URL=https://rustdesk.example.com
 RUSTDESK_API_LANG=zh-CN
 ENCRYPTED_ONLY=1
 MUST_LOGIN=Y
+
+RUSTDESK_API_SETTINGS_KEY=替换为第三个随机值
 
 RDGEN_GITHUB_USER=AllenMGu
 RDGEN_GITHUB_REPOSITORY=rustdesk-api
@@ -163,6 +206,7 @@ RUSTDESK_SOURCE_REF=master
 | `RUSTDESK_API_LANG` | API Web 语言：`zh-CN` 或 `en` | `zh-CN` |
 | `ENCRYPTED_ONLY` | 是否只接受加密的 RustDesk 连接：`0`/`1` | `0` |
 | `MUST_LOGIN` | 客户端是否必须登录后使用：`N`/`Y` | `N` |
+| `RUSTDESK_API_SETTINGS_KEY` | 加密页面保存的 LDAP Bind 密码；部署后必须保持不变 | 页面保存 LDAP 密码时必填 |
 | `RDGEN_SECRET_KEY` | RDGEN Django 随机密钥 | 必填 |
 | `RDGEN_INTERNAL_TOKEN` | API 代理访问内部 RDGEN 的独立令牌 | 必填 |
 | `RDGEN_GITHUB_TOKEN` | 触发 Actions、查询任务和管理 Artifact | 必填 |

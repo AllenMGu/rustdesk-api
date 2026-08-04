@@ -51,8 +51,18 @@ func Init(g *gin.Engine) {
 	RustdeskCmdBind(adg)
 	DeviceGroupBind(adg)
 	RdgenBind(adg)
+	LdapBind(adg)
 	//访问静态文件
 	//g.StaticFS("/upload", http.Dir(global.Config.Gin.ResourcesPath+"/upload"))
+}
+
+func LdapBind(adg *gin.RouterGroup) {
+	cont := &admin.Ldap{}
+	rg := adg.Group("/ldap").Use(middleware.AdminPrivilege())
+	rg.GET("/config", cont.Config)
+	rg.PUT("/config", cont.Update)
+	rg.POST("/test", cont.Test)
+	rg.POST("/rollback", cont.Rollback)
 }
 
 func RdgenBind(adg *gin.RouterGroup) {

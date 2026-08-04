@@ -46,13 +46,22 @@ func (us *UserService) InfoByOpenid(openid string) *model.User {
 
 // InfoByUsernamePassword 根据用户名密码取用户信息
 func (us *UserService) InfoByUsernamePassword(username, password string) *model.User {
-	if Config.Ldap.Enable {
+	if AllService.LdapService.Enabled() {
 		u, err := AllService.LdapService.Authenticate(username, password)
 		if err == nil {
 			return u
 		}
 		Logger.Errorf("LDAP authentication failed, %v", err)
-		Logger.Warn("Fallback to local database")
+
+		// LDAP failures must not silently fall back to an ordinary local user
+		// with the same name. Only an existing local administrator may use its
+		// local password as an explicitly enabled break-glass login.
+		localAdmin := us.InfoByUsername(username)
+		if !AllService.LdapService.EmergencyLocalAdminEnabled() ||
+			localAdmin.Id == 0 || localAdmin.IsAdmin == nil || !*localAdmin.IsAdmin {
+			return &model.User{}
+		}
+		Logger.Warn("LDAP authentication failed; trying the local emergency administrator")
 	}
 	u := &model.User{}
 	DB.Where("username = ?", username).First(u)

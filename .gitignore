@@ -7,6 +7,8 @@ resources/admin
 release
 data/rustdeskapi.db
 data/api/rdgen-client-defaults.json
+data/ldap-settings.json
+data/api/ldap-settings.json
 .env
 .env.*
 !.env.full-s6-generator.example

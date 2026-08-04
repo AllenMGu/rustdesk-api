@@ -91,6 +91,11 @@ func Init(rowVal *Config, path string) *viper.Viper {
 	if err := v.Unmarshal(rowVal); err != nil {
 		panic(fmt.Errorf("Fatal error config: %s \n", err))
 	}
+	if !v.IsSet("ldap.emergency-local-admin") {
+		// Keep one local administrator as a break-glass account when LDAP is
+		// unavailable. LDAP failures never fall back to ordinary local users.
+		rowVal.Ldap.EmergencyLocalAdmin = true
+	}
 	rowVal.Rustdesk.LoadKeyFile()
 	rowVal.Admin.Init()
 	return v

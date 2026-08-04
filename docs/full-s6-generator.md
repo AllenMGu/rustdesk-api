@@ -61,6 +61,7 @@ The relevant variables are:
 | `RUSTDESK_API_LANG` | API Web language: `zh-CN` or `en` | `zh-CN` |
 | `ENCRYPTED_ONLY` | Whether the RustDesk server accepts only encrypted connections | `0` |
 | `MUST_LOGIN` | Whether RustDesk clients must log in before use | `N` |
+| `RUSTDESK_API_SETTINGS_KEY` | Encrypts LDAP bind passwords saved in API Web; generate with `openssl rand -hex 32` and keep unchanged | required for UI password saves |
 | `RDGEN_SECRET_KEY` | Unique Django secret; generate with `openssl rand -hex 32` | required |
 | `RDGEN_INTERNAL_TOKEN` | Authenticates the API proxy to the internal RDGen service | required |
 | `RDGEN_GITHUB_USER` | Owner of this repository | `AllenMGu` |
@@ -115,6 +116,12 @@ Persistent state is stored below `./data`:
 - `rdgen/database`: Django SQLite database
 - `rdgen/exe`: completed clients returned by GitHub Actions
 - `rdgen/png` and `rdgen/temp-zips`: build images and temporary encrypted input
+
+API Web also stores administrator-managed LDAP settings at
+`./data/api/ldap-settings.json`. The bind password in this file is encrypted
+with `RUSTDESK_API_SETTINGS_KEY`; the key itself must remain only in `.env`.
+LDAP settings saved in API Web are applied immediately. Environment variables
+have higher priority and their corresponding fields are read-only in the page.
 
 Deployment-specific client defaults are also stored on the host rather than
 in the public repository. Create the file before starting the container:
