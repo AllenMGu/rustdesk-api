@@ -8,8 +8,13 @@ on:
         required: true
         default: ''
         type: string
-      zip_url:
-        description: 'url to zip of json'
+      input_blob_sha:
+        description: 'Git blob SHA containing the encrypted build inputs'
+        required: true
+        default: ''
+        type: string
+      build_uuid:
+        description: 'rdgen build UUID'
         required: true
         default: ''
         type: string
@@ -23,6 +28,10 @@ on:
         required: true
         default: 'master'
         type: string
+
+permissions:
+  actions: write
+  contents: read
 
 env:
   SCITER_RUST_VERSION: "1.75" # https://github.com/rustdesk/rustdesk/discussions/7503, also 1.78 has ABI change which causes our sciter version not working, https://blog.rust-lang.org/2024/03/30/i128-layout-update.html
@@ -53,7 +62,7 @@ jobs:
   setup:
     uses: ./.github/workflows/fetch-encrypted-secrets.yml
     with:
-      zip_url_json: ${{ inputs.zip_url }}
+      input_blob_sha: ${{ inputs.input_blob_sha }}
 
   generate-bridge:
     uses: ./.github/workflows/bridge.yml
@@ -85,9 +94,6 @@ jobs:
               arch: aarch64,
               vcpkg-triplet: arm64-osx,
             }
-    env:
-      STATUS_URL: "${{ secrets.GENURL }}/updategh"
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -101,15 +107,13 @@ jobs:
         with:
           zip_password: ${{ secrets.ZIP_PASSWORD }}
 
-      - name: Finalize and Cleanup zip/json
-        if: always() # Run even if previous steps fail
-        continue-on-error: true
-        uses: fjogeleit/http-request-action@v1
-        with:
-          url: "${{ secrets.GENURL }}/cleanzip"
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json", "Authorization": "Bearer ${{ env.upload_token }}"}'
-          data: '{"uuid": "${{ env.uuid }}"}'
+      - name: Verify build identity
+        shell: bash
+        run: |
+          if [[ "${{ env.uuid }}" != "${{ inputs.build_uuid }}" ]]; then
+            echo "Encrypted build UUID does not match workflow input" >&2
+            exit 1
+          fi
 
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v6
@@ -124,6 +128,13 @@ jobs:
             repository: ${{ inputs.source_repository }}
             ref: ${{ inputs.source_ref }}
             submodules: recursive
+
+      - name: Checkout generator patches
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: .rdgen-workflow
 
       - name: Install imagemagick and potrace and nasm and and
         shell: bash
@@ -252,7 +263,7 @@ jobs:
         continue-on-error: true
         run: |
             cd $(dirname $(dirname $(which flutter)))
-            [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+            [[ "3.24.5" == ${{env.FLUTTER_VERSION}} ]] && git apply .rdgen-workflow/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
       
       - name: Workaround for flutter issue
         shell: bash
@@ -455,7 +466,7 @@ jobs:
           sed -i '/let (request, url) =/,/Ok(())/{/Ok(())/!d}' ./src/common.rs
 
       - name: Restore bridge files
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: bridge-artifact
           path: ./
@@ -668,27 +679,13 @@ jobs:
             exit 1
           fi
 
-      - name: send file to rdgen server
-        if: ${{ env.rdgen == 'true' }}
-        shell: bash
-        run: |
-          curl --fail-with-body --show-error --silent -X POST \
-            -H "Content-Type: multipart/form-data" \
-            -H "Authorization: Bearer ${{ env.upload_token }}" \
-            -F "file=@$GITHUB_WORKSPACE/${{ env.filename }}-${{ matrix.job.arch }}.dmg" \
-            -F "uuid=${{ env.uuid }}" \
-            "${{ secrets.GENURL }}/save_custom_client"
-        
-
-      - name: send file to api server
-        if: ${{ env.rdgen == 'false' }}
-        shell: bash
-        run: |
-          curl -i -X POST \
-            -H "Content-Type: multipart/form-data" \
-            -H "Authorization: Bearer ${{ env.token }}" \
-            -F "file=@$GITHUB_WORKSPACE/${{ env.filename }}-${{ matrix.job.arch }}.dmg" \
-            "${{ env.apiServer }}/api/save_custom_client"
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rdgen-${{ inputs.build_uuid }}-macos-${{ matrix.job.arch }}
+          path: ${{ github.workspace }}/${{ env.filename }}-${{ matrix.job.arch }}.dmg
+          if-no-files-found: error
+          retention-days: 7
 
   cleanup:
     needs: [build-for-macos]
@@ -696,7 +693,14 @@ jobs:
     continue-on-error: true
     if: always()
     steps:
-      - name: Delete secrets artifact
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: encrypted-secrets-zip
+      - name: Delete temporary build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name | startswith(\"rdgen-${{ inputs.build_uuid }}-\") | not) | .id" |
+            while read -r artifact_id; do
+              gh api --method DELETE \
+                "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+            done

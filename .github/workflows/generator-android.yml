@@ -8,8 +8,13 @@ on:
         required: true
         default: ''
         type: string
-      zip_url:
-        description: 'url to zip of json'
+      input_blob_sha:
+        description: 'Git blob SHA containing the encrypted build inputs'
+        required: true
+        default: ''
+        type: string
+      build_uuid:
+        description: 'rdgen build UUID'
         required: true
         default: ''
         type: string
@@ -23,6 +28,10 @@ on:
         required: true
         default: 'master'
         type: string
+
+permissions:
+  actions: write
+  contents: read
 
 
 env:
@@ -48,13 +57,11 @@ env:
   MACOS_P12_BASE64: "${{ secrets.MACOS_P12_BASE64 }}"
   UPLOAD_ARTIFACT: 'true'
   SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}"
-  STATUS_URL: "${{ secrets.GENURL }}/updategh"
-
 jobs:
   setup:
     uses: ./.github/workflows/fetch-encrypted-secrets.yml
     with:
-      zip_url_json: ${{ inputs.zip_url }}
+      input_blob_sha: ${{ inputs.input_blob_sha }}
 
   generate-bridge-linux:
     uses: ./.github/workflows/bridge.yml
@@ -105,15 +112,13 @@ jobs:
         with:
           zip_password: ${{ secrets.ZIP_PASSWORD }}
 
-      - name: Finalize and Cleanup zip/json
-        if: always() # Run even if previous steps fail
-        continue-on-error: true
-        uses: fjogeleit/http-request-action@v1
-        with:
-          url: "${{ secrets.GENURL }}/cleanzip"
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json", "Authorization": "Bearer ${{ env.upload_token }}"}'
-          data: '{"uuid": "${{ env.uuid }}"}'
+      - name: Verify build identity
+        shell: bash
+        run: |
+          if [[ "${{ env.uuid }}" != "${{ inputs.build_uuid }}" ]]; then
+            echo "Encrypted build UUID does not match workflow input" >&2
+            exit 1
+          fi
 
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
@@ -132,16 +137,6 @@ jobs:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
-
-      - name: Set rdgen value
-        if: ${{ env.rdgen == 'true' }}
-        run: |
-          echo "STATUS_URL=${{ secrets.GENURL }}/updategh" >> $GITHUB_ENV
-
-      - name: Set rdgen value
-        if: ${{ env.rdgen == 'false' }}
-        run: |
-          echo "STATUS_URL=${{ env.apiServer }}/api/updategh" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: |
@@ -192,6 +187,13 @@ jobs:
           ref: ${{ inputs.source_ref }}
           submodules: recursive
 
+      - name: Checkout generator patches
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: .rdgen-workflow
+
       - name: Install flutter
         uses: subosito/flutter-action@v2
         with:
@@ -202,7 +204,7 @@ jobs:
         continue-on-error: true
         run: |
           cd $(dirname $(dirname $(which flutter)))
-          [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply ${{ github.workspace }}/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
+          [[ "3.24.5" == ${{env.ANDROID_FLUTTER_VERSION}} ]] && git apply .rdgen-workflow/.github/patches/flutter_3.24.4_dropdown_menu_enableFilter.diff
   
 
       - uses: nttld/setup-ndk@v1
@@ -247,7 +249,7 @@ jobs:
         shell: bash
 
       - name: Restore bridge files
-        uses: actions/download-artifact@master
+        uses: actions/download-artifact@v4
         with:
           name: bridge-artifact
           path: ./
@@ -474,7 +476,7 @@ jobs:
           esac
 
       - name: Upload Rustdesk library to Artifacts
-        uses: actions/upload-artifact@master
+        uses: actions/upload-artifact@v4
         with:
           name: librustdesk.so.${{ matrix.job.target }}
           path: ./target/${{ matrix.job.target }}/release/liblibrustdesk.so
@@ -564,74 +566,28 @@ jobs:
           # override default build-tools version (29.0.3) -- optional
           BUILD_TOOLS_VERSION: "30.0.2"
 
-      - name: send file to rdgen server
-        if: ${{ env.rdgen == 'true' }}
-        uses: nick-fields/retry@v3
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
         with:
-          timeout_minutes: 1
-          max_attempts: 3
-          shell: bash
-          command: |
-            curl --fail-with-body --show-error --silent -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.upload_token }}" -F "file=@./signed-apk/${{ env.filename }}-${{ matrix.job.arch }}.apk" -F "uuid=${{ env.uuid }}" ${{ secrets.GENURL }}/save_custom_client
-
-      - name: send file to api server
-        if: ${{ env.rdgen == 'false' }}
-        uses: nick-fields/retry@v3
-        with:
-          timeout_minutes: 1
-          max_attempts: 3
-          shell: bash
-          command: |
-            curl -i -X POST -H "Content-Type: multipart/form-data" -H "Authorization: Bearer ${{ env.token }}" -F "file=@./signed-apk/${{ env.filename }}-${{ matrix.job.arch }}.apk" ${{ env.apiServer }}/api/save_custom_client
-
-  deploy:
-    needs: [build-rustdesk-android]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        
-      - uses: actions/download-artifact@v4
-        with:
-          name: encrypted-secrets-zip
-
-      - name: Load Secrets
-        uses: ./.github/actions/decrypt-secrets
-        with:
-          zip_password: ${{ secrets.ZIP_PASSWORD }}
-
-      - name: Finalize and Cleanup zip/json
-        if: always() # Run even if previous steps fail
-        continue-on-error: true
-        uses: fjogeleit/http-request-action@v1
-        with:
-          url: "${{ secrets.GENURL }}/cleanzip"
-          method: 'POST'
-          customHeaders: '{"Content-Type": "application/json", "Authorization": "Bearer ${{ env.upload_token }}"}'
-          data: '{"uuid": "${{ env.uuid }}"}'
-
-      - name: Set rdgen value
-        if: ${{ env.rdgen == 'true' }}
-        run: |
-          echo "STATUS_URL=${{ secrets.GENURL }}/updategh" >> $GITHUB_ENV
-
-      - name: Set rdgen value
-        if: ${{ env.rdgen == 'false' }}
-        run: |
-          echo "STATUS_URL=${{ env.apiServer }}/api/updategh" >> $GITHUB_ENV
-
-      - uses: geekyeggo/delete-artifact@v5
-        continue-on-error: true
-        with:
-            name: ${{ env.filename }}-*.deb
+          name: rdgen-${{ inputs.build_uuid }}-android-${{ matrix.job.arch }}
+          path: ./signed-apk/${{ env.filename }}-${{ matrix.job.arch }}.apk
+          if-no-files-found: error
+          retention-days: 7
 
   cleanup:
-    needs: [build-rustdesk-android, deploy]
+    needs: [build-rustdesk-android]
     runs-on: ubuntu-latest
     continue-on-error: true
     if: always()
     steps:
-      - name: Delete secrets artifact
-        uses: geekyeggo/delete-artifact@v5
-        with:
-          name: encrypted-secrets-zip
+      - name: Delete temporary build artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name | startswith(\"rdgen-${{ inputs.build_uuid }}-\") | not) | .id" |
+            while read -r artifact_id; do
+              gh api --method DELETE \
+                "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+            done

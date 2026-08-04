@@ -54,7 +54,7 @@ desktop software that provides self-hosted solutions.
 - CLI
     - Reset admin password
 - Integrated RDGen
-    - Authenticated Windows client generator in the API administration UI
+    - Authenticated Windows, Linux, Android, and macOS client generator in the API administration UI
     - Django source and GitHub Actions workflows stored in this repository
     - Outbound-only GitHub Artifact download flow; no separate RDGen repository
 
@@ -227,8 +227,9 @@ The table below does not list all configurations. Please refer to the configurat
 
 3. To run the RustDesk server, API, and client generator in one Full S6
    container, use the `full-s6-generator` image and follow the
-   [deployment guide](./docs/full-s6-generator.md). Windows clients are built
-   by GitHub Actions; the container runs only the generator UI and callbacks.
+   [deployment guide](./docs/full-s6-generator.md). Windows, Linux, Android,
+   and macOS clients are built by GitHub Actions; the container runs the
+   generator UI and pulls completed Artifacts without inbound callbacks.
 
 #### Running from Release
 
