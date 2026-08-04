@@ -27,14 +27,6 @@ on:
         description: 'Web Client API Repository'
         required: true
         default: 'https://github.com/lejianwen/rustdesk-api-web'
-      RDGEN_REPOSITORY:
-        description: 'rdgen Git repository used by full-s6-generator'
-        required: false
-        default: 'https://github.com/AllenMGu/rdgen.git'
-      RDGEN_REF:
-        description: 'rdgen branch, tag, or commit used by full-s6-generator'
-        required: false
-        default: 'master'
   push:
     tags:
       - 'v*.*.*'  # 当推送带有版本号的 tag（例如 v1.0.0）时触发工作流
@@ -48,8 +40,6 @@ env:
   GHCR_IMAGE_NAMESPACE: ${{ github.event.inputs.GHCR_IMAGE_NAMESPACE || github.actor }}
   SKIP_DOCKER_HUB: ${{ github.event.inputs.SKIP_DOCKER_HUB || 'false' }}
   SKIP_GHCR: ${{ github.event.inputs.SKIP_GHCR || 'false' }}
-  RDGEN_REPOSITORY: ${{ github.event.inputs.RDGEN_REPOSITORY || 'https://github.com/AllenMGu/rdgen.git' }}
-  RDGEN_REF: ${{ github.event.inputs.RDGEN_REF || 'master' }}
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -349,8 +339,6 @@ jobs:
           build-args: |
             BUILDARCH=${{ matrix.job.platform }}
             WEBCLIENT_REPOSITORY=${{ env.WEBCLIENT_SOURCE_LOCATION }}
-            RDGEN_REPOSITORY=${{ env.RDGEN_REPOSITORY }}
-            RDGEN_REF=${{ env.RDGEN_REF }}
           tags: |
             ${{ env.DOCKERHUB_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-${{ matrix.job.platform }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -398,8 +386,6 @@ jobs:
           build-args: |
             BUILDARCH=${{ matrix.job.platform }}
             WEBCLIENT_REPOSITORY=${{ env.WEBCLIENT_SOURCE_LOCATION }}
-            RDGEN_REPOSITORY=${{ env.RDGEN_REPOSITORY }}
-            RDGEN_REF=${{ env.RDGEN_REF }}
           tags: |
             ghcr.io/${{ env.GHCR_IMAGE_NAMESPACE }}/rustdesk-api:full-s6-generator-${{ matrix.job.platform }}
           labels: ${{ steps.meta.outputs.labels }}

@@ -237,7 +237,7 @@
    客户端生成流程：
 
    1. S6 服务器将加密配置上传为 GitHub Git blob，并触发
-      `AllenMGu/rdgen` 的 GitHub Actions。
+      当前 `AllenMGu/rustdesk-api` 仓库内的 RDGen GitHub Actions。
    2. GitHub Actions 编译 Windows EXE/MSI，并上传名为
       `rdgen-<构建UUID>` 的 Artifact。
    3. S6 中的 `rdgen-poller` 服务默认每 60 秒查询一次运行状态。
@@ -253,11 +253,11 @@
    此流程不需要公网 IP、入站 NAT、GitHub 回调地址或 Windows
    self-hosted runner；S6 服务器只需能够主动访问 GitHub HTTPS。
 
-   `AllenMGu/rdgen` 仓库只需配置 Actions Secret：
+   `AllenMGu/rustdesk-api` 仓库需配置 Actions Secret：
 
    - `ZIP_PASSWORD`：与 `.env` 中的 `RDGEN_ZIP_PASSWORD` 相同。
 
-   `RDGEN_GITHUB_TOKEN` 使用仅限 `AllenMGu/rdgen` 的 fine-grained token，
+   `RDGEN_GITHUB_TOKEN` 使用仅限 `AllenMGu/rustdesk-api` 的 fine-grained token，
    仓库权限设置为：
 
    - `Actions: Read and write`
@@ -275,9 +275,9 @@
    | `MUST_LOGIN` | RustDesk 客户端是否必须登录后使用 | `N` |
    | `RDGEN_SECRET_KEY` | Django 服务随机密钥，可用 `openssl rand -hex 32` 生成 | 必填 |
    | `RDGEN_INTERNAL_TOKEN` | API 反向代理访问内部生成器的独立随机令牌 | 必填 |
-   | `RDGEN_GITHUB_USER` | rdgen 仓库所有者 | `AllenMGu` |
-   | `RDGEN_GITHUB_REPOSITORY` | rdgen 仓库名称，不含所有者 | `rdgen` |
-   | `RDGEN_GITHUB_BRANCH` | 触发工作流的 rdgen 分支 | `master` |
+   | `RDGEN_GITHUB_USER` | 当前单仓所有者 | `AllenMGu` |
+   | `RDGEN_GITHUB_REPOSITORY` | 包含 API 与 RDGen 的仓库名 | `rustdesk-api` |
+   | `RDGEN_GITHUB_BRANCH` | 触发单仓 RDGen 工作流的分支 | `master` |
    | `RDGEN_GITHUB_TOKEN` | 触发、查询并下载 GitHub Actions Artifact | 必填 |
    | `RDGEN_ZIP_PASSWORD` | 加密客户端构建配置 | 必填 |
    | `RDGEN_GITHUB_POLL_INTERVAL` | S6 查询构建状态的间隔（秒） | `60` |
