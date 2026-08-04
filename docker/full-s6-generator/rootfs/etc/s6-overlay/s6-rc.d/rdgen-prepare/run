@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+for variable_name in SECRET_KEY GHUSER GHBEARER GENURL ZIP_PASSWORD UPLOAD_TOKEN SH_SECRET; do
+  if [ -z "$(printenv "${variable_name}" 2>/dev/null)" ]; then
+    echo "rdgen: required environment variable ${variable_name} is empty" >&2
+    exit 1
+  fi
+done
+
+mkdir -p \
+  /opt/rdgen/data \
+  /opt/rdgen/exe \
+  /opt/rdgen/png \
+  /opt/rdgen/temp_zips
+
+chown -R rdgen:rdgen \
+  /opt/rdgen/data \
+  /opt/rdgen/exe \
+  /opt/rdgen/png \
+  /opt/rdgen/temp_zips
+
+attempt=0
+while [ ! -s /data/id_ed25519.pub ]; do
+  attempt=$((attempt + 1))
+  if [ "${attempt}" -ge 30 ]; then
+    echo "rdgen: RustDesk server public key was not created within 30 seconds" >&2
+    exit 1
+  fi
+  sleep 1
+done
+
+cp /data/id_ed25519.pub "${RUSTDESK_PUBLIC_KEY_FILE}"
+chown rdgen:rdgen "${RUSTDESK_PUBLIC_KEY_FILE}"
+chmod 0400 "${RUSTDESK_PUBLIC_KEY_FILE}"
+
+cd /opt/rdgen
+exec /command/s6-setuidgid rdgen /opt/rdgen/.venv/bin/python manage.py migrate --noinput

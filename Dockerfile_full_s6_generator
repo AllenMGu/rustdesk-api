@@ -63,7 +63,7 @@ RUN addgroup -S rdgen \
     && chmod 755 \
       /etc/s6-overlay/s6-rc.d/api/run \
       /etc/s6-overlay/s6-rc.d/rdgen/run \
-      /etc/s6-overlay/s6-rc.d/rdgen-prepare/up \
+      /etc/s6-overlay/s6-rc.d/rdgen-prepare/run \
     && chown -R rdgen:rdgen \
       /opt/rdgen/data \
       /opt/rdgen/exe \

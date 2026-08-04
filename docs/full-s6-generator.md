@@ -42,6 +42,17 @@ docker compose --env-file .env \
   -f docker-compose.full-s6-generator.yaml up -d
 ```
 
+The compose file also works with rootful Podman after a compose provider such
+as `podman-compose` is installed:
+
+```sh
+podman-compose -f docker-compose.full-s6-generator.yaml up -d
+```
+
+Its bind mounts use the SELinux private relabel option (`:Z`), allowing the
+RustDesk server, API SQLite database, and rdgen to write to their persistent
+directories on enforcing Podman hosts.
+
 The compose example binds rdgen to `127.0.0.1:8000`. Put an HTTPS reverse
 proxy in front of it and use that public URL for both `RDGEN_PUBLIC_URL` and
 the `GENURL` Actions secret. GitHub runners must be able to fetch encrypted
