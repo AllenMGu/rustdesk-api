@@ -24,10 +24,9 @@ Android, and macOS builds. It uses these root workflows and assets:
 - `.github/actions/decrypt-secrets/`
 - `.github/patches/`
 
-Older self-hosted Windows, web, cache, and standalone image workflows remain in
-`rdgen/legacy-workflows/`. They are intentionally outside
-`.github/workflows/`, so GitHub does not register workflows that are not
-compatible with the current outbound Artifact flow.
+Historical self-hosted, callback-upload, cache-maintenance, and standalone
+image workflows were removed after the monorepo migration. Only the root
+workflows listed above implement the supported outbound Artifact flow.
 
 ## Build flow
 
