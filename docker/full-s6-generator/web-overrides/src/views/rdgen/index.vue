@@ -33,7 +33,19 @@
               <el-select v-model="form.platform">
                 <el-option label="Windows 64 位" value="windows"/>
                 <el-option label="Windows 32 位" value="windows-x86"/>
+                <el-option label="Linux" value="linux"/>
+                <el-option label="macOS" value="macos"/>
+                <el-option label="Android" value="android"/>
               </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="form.platform === 'android'" :xs="24" :md="8">
+            <el-form-item label="Android App ID（可选）">
+              <el-input
+                v-model="form.androidappid"
+                clearable
+                placeholder="例如 com.example.rustdesk；留空使用默认 App ID"
+              />
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="8">
@@ -335,6 +347,8 @@ import {
 } from '@/api/rdgen'
 
 const versions = ['master', '1.4.9', '1.4.8', '1.4.7', '1.4.6', '1.4.5', '1.4.4', '1.4.3', '1.4.2', '1.4.1', '1.4.0']
+const supportedPlatforms = ['windows', 'windows-x86', 'linux', 'macos', 'android']
+const androidAppIdPattern = /^[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+$/
 const detectedServer = window.location.hostname
 const detectedApiServer = window.location.origin
 
@@ -521,13 +535,29 @@ function errorMessage(error) {
 }
 
 async function submitBuild() {
-  if (!form.exename) {
-    ElMessage.error('请填写 EXE 文件名')
+  if (!supportedPlatforms.includes(form.platform)) {
+    ElMessage.error('请选择有效的目标平台')
+    return
+  }
+  if (!form.exename.trim()) {
+    ElMessage.error('请填写客户端文件名')
+    return
+  }
+  if (
+    form.platform === 'android'
+    && form.androidappid.trim()
+    && !androidAppIdPattern.test(form.androidappid.trim())
+  ) {
+    ElMessage.error('Android App ID 格式不正确，例如 com.example.rustdesk')
     return
   }
   creating.value = true
   try {
-    const response = await createBuild({ ...form })
+    const response = await createBuild({
+      ...form,
+      exename: form.exename.trim(),
+      androidappid: form.androidappid.trim(),
+    })
     Object.assign(currentBuild, { last_error: '', ...response.data })
     ElMessage.success('编译任务已提交')
     startPolling()
