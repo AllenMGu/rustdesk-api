@@ -498,7 +498,8 @@ Shell 命令、README、聊天记录或 Git 仓库中。
 ### 5. 配置并启动 Full S6
 
 复制数据不会迁移容器环境变量。请在新部署的 `.env` 中重新配置服务器地址、API 地址、
-登录策略和 RDGEN 变量。旧部署若还使用 LDAP、`RUSTDESK_API_JWT_KEY` 或外部数据库变量，也必须把对应值
+登录策略和 RDGEN 变量。旧部署若还使用 LDAP、`RUSTDESK_API_JWT_KEY` 或
+外部数据库变量，也必须把对应值
 迁移到新部署的 `.env`。当前 Compose 会显式传递 JWT 密钥，并通过 `env_file` 传递其余
 已配置变量；环境变量仍具有最高配置优先级。配置完成后执行：
 
