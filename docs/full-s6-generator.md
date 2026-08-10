@@ -61,6 +61,7 @@ The relevant variables are:
 | `RUSTDESK_API_LANG` | API Web language: `zh-CN` or `en` | `zh-CN` |
 | `ENCRYPTED_ONLY` | Whether the RustDesk server accepts only encrypted connections | `0` |
 | `MUST_LOGIN` | Whether RustDesk clients must log in before use | `N` |
+| `RUSTDESK_API_JWT_KEY` | Shared HS256 key used by the API issuer and hbbs verifier; generate with `openssl rand -hex 32` and keep unchanged | required when `MUST_LOGIN=Y` |
 | `RUSTDESK_API_SETTINGS_KEY` | Encrypts LDAP bind passwords saved in API Web; generate with `openssl rand -hex 32` and keep unchanged | required for UI password saves |
 | `RDGEN_SECRET_KEY` | Unique Django secret; generate with `openssl rand -hex 32` | required |
 | `RDGEN_INTERNAL_TOKEN` | Authenticates the API proxy to the internal RDGen service | required |
@@ -100,6 +101,13 @@ Because host networking bypasses Compose port publishing, ensure ports
 `21114-21119/tcp` and `21116/udp` are allowed by the host firewall. Keep port
 `8000/tcp` closed to remote clients; RustDesk API reaches rdgen through
 `127.0.0.1:8000` inside the shared network namespace.
+
+The Full S6 images copy `hbbs` and `hbbr` from
+`lejianwen/rustdesk-server-s6:v0.1.2`. This forapi build supports desktop
+client WebSocket connections for RustDesk 1.4.1 and later on ports
+`21118/21119`. Replacing `RUSTDESK_SERVER_IMAGE` with the official OSS S6
+image removes that desktop registration support even though the ports can
+still accept browser Web Client connections.
 
 The compose example sets `RDGEN_BIND_HOST=127.0.0.1`, so the internal rdgen
 service remains available only to processes on this host even though the
@@ -169,8 +177,10 @@ key automatically. The private key is never copied.
 ## 3. Build the image
 
 The release workflow publishes the multi-architecture tag
-`full-s6-generator`. A local build needs an API release directory such as
-`amd64/release`:
+`full-s6-generator`. Both Full S6 Dockerfiles default to the fixed
+`lejianwen/rustdesk-server-s6:v0.1.2` base so desktop WebSocket,
+`MUST_LOGIN`, and JWT verification remain available. A local build needs an
+API release directory such as `amd64/release`:
 
 ```sh
 docker build \
@@ -191,6 +201,8 @@ leave `SKIP_GHCR=false`. The resulting image is
 
 - Do not place GitHub tokens, passwords, private keys, or permanent RustDesk
   passwords in the Dockerfile, compose file, or Git repository.
+- When `MUST_LOGIN=Y`, set a strong `RUSTDESK_API_JWT_KEY`. The same value
+  must be visible to the API token issuer and the hbbs verifier.
 - Generator creation, artifact listing, downloads, and local deletion require
   an authenticated RustDesk API Web administrator.
 - Keep `RDGEN_BIND_HOST=127.0.0.1`; port `8000` is an internal service and

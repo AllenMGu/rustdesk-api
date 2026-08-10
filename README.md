@@ -157,16 +157,18 @@ cp .env.full-s6-generator.example .env
 chmod 600 .env
 ```
 
-生成三个不同的内部随机密钥：
+生成四个不同的内部随机密钥：
 
 ```bash
 openssl rand -hex 32
 openssl rand -hex 32
 openssl rand -hex 32
+openssl rand -hex 32
 ```
 
-将三个输出分别写入 `RDGEN_SECRET_KEY`、`RDGEN_INTERNAL_TOKEN` 和
-`RUSTDESK_API_SETTINGS_KEY`。三个密钥必须不同，也不能使用 GitHub Token 或 ZIP 密码代替。
+将四个输出分别写入 `RDGEN_SECRET_KEY`、`RDGEN_INTERNAL_TOKEN`、
+`RUSTDESK_API_SETTINGS_KEY` 和 `RUSTDESK_API_JWT_KEY`。四个密钥必须不同，
+也不能使用 GitHub Token 或 ZIP 密码代替。
 
 ### 4. 配置 `.env`
 
@@ -180,6 +182,7 @@ RUSTDESK_API_PUBLIC_URL=https://rustdesk.example.com
 RUSTDESK_API_LANG=zh-CN
 ENCRYPTED_ONLY=1
 MUST_LOGIN=Y
+RUSTDESK_API_JWT_KEY=替换为第四个随机值
 
 RUSTDESK_API_SETTINGS_KEY=替换为第三个随机值
 
@@ -206,6 +209,7 @@ RUSTDESK_SOURCE_REF=master
 | `RUSTDESK_API_LANG` | API Web 语言：`zh-CN` 或 `en` | `zh-CN` |
 | `ENCRYPTED_ONLY` | 是否只接受加密的 RustDesk 连接：`0`/`1` | `0` |
 | `MUST_LOGIN` | 客户端是否必须登录后使用：`N`/`Y` | `N` |
+| `RUSTDESK_API_JWT_KEY` | API 签发与 hbbs 校验登录令牌的共享密钥；`MUST_LOGIN=Y` 时必填并保持不变 | 空 |
 | `RUSTDESK_API_SETTINGS_KEY` | 加密页面保存的 LDAP Bind 密码；部署后必须保持不变 | 页面保存 LDAP 密码时必填 |
 | `RDGEN_SECRET_KEY` | RDGEN Django 随机密钥 | 必填 |
 | `RDGEN_INTERNAL_TOKEN` | API 代理访问内部 RDGEN 的独立令牌 | 必填 |
@@ -293,6 +297,12 @@ Compose 使用 `network_mode: host`。服务器防火墙至少需要按使用场
 | `21118` | TCP | WebSocket ID 服务 |
 | `21119` | TCP | WebSocket Relay |
 | `8000` | TCP | RDGEN 内部服务，必须保持仅本机访问 |
+
+`full-s6-generator` 默认从 `lejianwen/rustdesk-server-s6:v0.1.2` 复制
+`hbbs` 和 `hbbr`。该 `forapi` 构建支持 RustDesk 桌面客户端（`>= 1.4.1`）
+直接通过 `21118/21119` 使用 WebSocket。若将构建参数
+`RUSTDESK_SERVER_IMAGE` 改回官方 `rustdesk/rustdesk-server-s6`，端口仍可能监听，
+但桌面客户端注册不受支持；浏览器 Web Client 与桌面客户端的适用范围不同。
 
 使用 firewalld 的示例：
 
@@ -488,9 +498,10 @@ Shell 命令、README、聊天记录或 Git 仓库中。
 ### 5. 配置并启动 Full S6
 
 复制数据不会迁移容器环境变量。请在新部署的 `.env` 中重新配置服务器地址、API 地址、
-登录策略和 RDGEN 变量。旧部署若还使用 LDAP、`RUSTDESK_API_JWT_KEY` 或外部数据库变量，
-也必须把它们加入新 Compose 的 `services.rustdesk.environment`；仅写入 `.env`、但 Compose
-没有引用的变量不会进入容器。配置完成后执行：
+登录策略和 RDGEN 变量。旧部署若还使用 LDAP、`RUSTDESK_API_JWT_KEY` 或
+外部数据库变量，也必须把对应值
+迁移到新部署的 `.env`。当前 Compose 会显式传递 JWT 密钥，并通过 `env_file` 传递其余
+已配置变量；环境变量仍具有最高配置优先级。配置完成后执行：
 
 ```bash
 cd "$new_deploy_dir"
@@ -682,6 +693,11 @@ Swagger 默认不公开，可通过配置显式启用。
 
 普通 API 使用 `Dockerfile`，Full S6 使用 `Dockerfile_full_s6`，带客户端生成器的一体化镜像使用 `Dockerfile_full_s6_generator`。
 
+两份 Full S6 Dockerfile 默认固定使用
+`lejianwen/rustdesk-server-s6:v0.1.2`，以保留桌面客户端 WebSocket、
+`MUST_LOGIN` 和 JWT 校验。仅在明确接受这些功能差异时，才通过
+`RUSTDESK_SERVER_IMAGE` 构建参数替换服务端基础镜像。
+
 本地构建 Full S6 Generator 示例：
 
 ```bash
@@ -706,6 +722,7 @@ RDGEN 的开发与测试说明见 [rdgen/README.md](rdgen/README.md)，完整生
 - 保持 `RDGEN_BIND_HOST=127.0.0.1`，禁止外部访问 `8000/tcp`。
 - GitHub Token 只授权 `AllenMGu/rustdesk-api`，不要授予账户级或其他仓库权限。
 - `RDGEN_SECRET_KEY`、`RDGEN_INTERNAL_TOKEN`、`RDGEN_ZIP_PASSWORD` 必须使用不同的随机值。
+- 设置 `MUST_LOGIN=Y` 时必须同时配置独立的 `RUSTDESK_API_JWT_KEY`，并在 API 与 hbbs 间保持一致。
 - 不要把 `.env`、永久密码、GitHub Token、签名证书或 RustDesk 私钥提交到 Git。
 - 默认配置只会把 `/data/id_ed25519.pub` 公钥复制给生成器，私钥不会复制到 RDGEN。
 - 生成器中的永久密码会被嵌入客户端，泄露后应立即轮换并重新生成客户端。
@@ -717,7 +734,7 @@ RDGEN 的开发与测试说明见 [rdgen/README.md](rdgen/README.md)，完整生
 
 | 项目 | 用途 | 来源 |
 |---|---|---|
-| RustDesk Server S6 | Full S6 容器、S6 服务编排与 Server/API 整合基础 | [源码：lejianwen/rustdesk-server `forapi`](https://github.com/lejianwen/rustdesk-server/tree/forapi)；[镜像：lejianwen/rustdesk-server-s6](https://hub.docker.com/r/lejianwen/rustdesk-server-s6) |
+| RustDesk Server S6 | Full S6 容器、S6 服务编排与 Server/API 整合基础 | [源码：lejianwen/rustdesk-server `forapi`](https://github.com/lejianwen/rustdesk-server/tree/forapi)；[镜像：lejianwen/rustdesk-server-s6 `v0.1.2`](https://hub.docker.com/r/lejianwen/rustdesk-server-s6/tags) |
 | RustDesk API | Go API、Web Admin、Web Client 与管理功能 | [lejianwen/rustdesk-api](https://github.com/lejianwen/rustdesk-api) |
 | RDGEN | 自定义 RustDesk 客户端生成器 | [bryangerlach/rdgen](https://github.com/bryangerlach/rdgen) |
 | RustDesk | 远程桌面客户端与服务端上游 | [rustdesk/rustdesk](https://github.com/rustdesk/rustdesk) |
