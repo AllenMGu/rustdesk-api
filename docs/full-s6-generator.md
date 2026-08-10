@@ -180,7 +180,7 @@ The release workflow publishes the multi-architecture tag
 `full-s6-generator`. Both Full S6 Dockerfiles default to the fixed
 `lejianwen/rustdesk-server-s6:v0.1.2` base so desktop WebSocket,
 `MUST_LOGIN`, and JWT verification remain available. A local build needs an
-API release directory such as `amd64/release`: 
+API release directory such as `amd64/release`:
 
 ```sh
 docker build \
