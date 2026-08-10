@@ -1,4 +1,6 @@
-FROM rustdesk/rustdesk-server-s6:1.1.16 AS server
+# The forapi build adds desktop-client WebSocket and MUST_LOGIN/JWT support.
+ARG RUSTDESK_SERVER_IMAGE=lejianwen/rustdesk-server-s6:v0.1.2
+FROM ${RUSTDESK_SERVER_IMAGE} AS server
 
 FROM --platform=$BUILDPLATFORM node:20-alpine AS web
 
