@@ -1,0 +1,7 @@
+#!/command/with-contenv sh
+set -eu
+
+if [ "${MUST_LOGIN:-N}" = "Y" ] && [ -z "${RUSTDESK_API_JWT_KEY:-}" ]; then
+  echo "ERROR: RUSTDESK_API_JWT_KEY is required when MUST_LOGIN=Y." >&2
+  exit 1
+fi

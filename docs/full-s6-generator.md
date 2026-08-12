@@ -103,7 +103,9 @@ Because host networking bypasses Compose port publishing, ensure ports
 `127.0.0.1:8000` inside the shared network namespace.
 
 The Full S6 images copy `hbbs` and `hbbr` from
-`lejianwen/rustdesk-server-s6:v0.1.2`. This forapi build supports desktop
+`lejianwen/rustdesk-server-s6:v0.1.2`, pinned to manifest digest
+`sha256:eabc3d1a845b0bbb717b819c36627a261931d7325fcf5dff0a8605645a3cce62`.
+This forapi build supports desktop
 client WebSocket connections for RustDesk 1.4.1 and later on ports
 `21118/21119`. Replacing `RUSTDESK_SERVER_IMAGE` with the official OSS S6
 image removes that desktop registration support even though the ports can
@@ -178,7 +180,8 @@ key automatically. The private key is never copied.
 
 The release workflow publishes the multi-architecture tag
 `full-s6-generator`. Both Full S6 Dockerfiles default to the fixed
-`lejianwen/rustdesk-server-s6:v0.1.2` base so desktop WebSocket,
+`lejianwen/rustdesk-server-s6:v0.1.2@sha256:eabc3d1a845b0bbb717b819c36627a261931d7325fcf5dff0a8605645a3cce62`
+base so desktop WebSocket,
 `MUST_LOGIN`, and JWT verification remain available. A local build needs an
 API release directory such as `amd64/release`:
 
@@ -202,7 +205,8 @@ leave `SKIP_GHCR=false`. The resulting image is
 - Do not place GitHub tokens, passwords, private keys, or permanent RustDesk
   passwords in the Dockerfile, compose file, or Git repository.
 - When `MUST_LOGIN=Y`, set a strong `RUSTDESK_API_JWT_KEY`. The same value
-  must be visible to the API token issuer and the hbbs verifier.
+  must be visible to the API token issuer and the hbbs verifier. The S6
+  preflight check stops the container before `hbbs` starts if the key is empty.
 - Generator creation, artifact listing, downloads, and local deletion require
   an authenticated RustDesk API Web administrator.
 - Keep `RDGEN_BIND_HOST=127.0.0.1`; port `8000` is an internal service and

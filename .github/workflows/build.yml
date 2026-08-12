@@ -73,6 +73,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Point admin Web Client links at the bundled client
+        run: node docker/full-s6-generator/web-overrides/patch-webclient.mjs rustdesk-api-web/src/utils/webclient.js
+
       - name: build rustdesk-api-web
         working-directory: rustdesk-api-web
         run: |
