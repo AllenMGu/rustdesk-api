@@ -119,6 +119,7 @@ RUN addgroup -S rdgen \
 
 ENV RELAY=relay.example.com \
     ENCRYPTED_ONLY=0 \
+    S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     PYTHONUNBUFFERED=1 \
     DATABASE_PATH=/opt/rdgen/data/db.sqlite3 \
     RDGEN_PORT=8000 \
