@@ -1,0 +1,144 @@
+name: Full S6 Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Dockerfile_full_s6'
+      - 'Dockerfile_full_s6_generator'
+      - 'docker/full-s6-common/**'
+      - 'docker/full-s6-generator/web-overrides/**'
+      - 'http/router/**'
+      - 'tests/desktop_websocket_register.py'
+      - 'tests/fixtures/apimain'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/build_test.yml'
+      - '.github/workflows/full-s6-integration.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'Dockerfile_full_s6'
+      - 'Dockerfile_full_s6_generator'
+      - 'docker/full-s6-common/**'
+      - 'docker/full-s6-generator/web-overrides/**'
+      - 'http/router/**'
+      - 'tests/desktop_websocket_register.py'
+      - 'tests/fixtures/apimain'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/build_test.yml'
+      - '.github/workflows/full-s6-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  webclient:
+    name: Web Client links and routes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout upstream admin UI
+        uses: actions/checkout@v4
+        with:
+          repository: lejianwen/rustdesk-api-web
+          path: rustdesk-api-web
+          ref: master
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Patch and verify Web Client links
+        shell: bash
+        run: |
+          node docker/full-s6-generator/web-overrides/patch-webclient.mjs \
+            rustdesk-api-web/src/utils/webclient.js
+          if grep -qF '/webclient2/' rustdesk-api-web/src/utils/webclient.js; then
+            echo 'webclient2 link remains after patch' >&2
+            exit 1
+          fi
+          grep -qF '/webclient/#/?id=${encodeURIComponent(row.id)}' \
+            rustdesk-api-web/src/utils/webclient.js
+          grep -qF '/webclient/#/?share_token=${encodeURIComponent(token)}' \
+            rustdesk-api-web/src/utils/webclient.js
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: false
+
+      - name: Test legacy Web Client redirect
+        run: go test -mod=mod ./http/router
+
+  desktop-websocket:
+    name: Desktop WebSocket RegisterPk
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify pinned server image
+        shell: bash
+        run: |
+          expected='ARG RUSTDESK_SERVER_IMAGE=lejianwen/rustdesk-server-s6:v0.1.2@sha256:eabc3d1a845b0bbb717b819c36627a261931d7325fcf5dff0a8605645a3cce62'
+          grep -qxF "$expected" Dockerfile_full_s6
+          grep -qxF "$expected" Dockerfile_full_s6_generator
+
+      - name: Validate registration probe
+        run: python3 -m py_compile tests/desktop_websocket_register.py
+
+      - name: Build Full S6 integration image
+        shell: bash
+        run: |
+          mkdir -p amd64/release
+          install -m 0755 tests/fixtures/apimain amd64/release/apimain
+          docker build --pull \
+            --build-arg BUILDARCH=amd64 \
+            --file Dockerfile_full_s6 \
+            --tag rustdesk-api:full-s6-integration .
+
+      - name: Reject MUST_LOGIN without JWT key
+        shell: bash
+        run: |
+          set +e
+          timeout 30s docker run --name full-s6-jwt-missing \
+            --env MUST_LOGIN=Y \
+            --env RUSTDESK_API_JWT_KEY= \
+            rustdesk-api:full-s6-integration \
+            >"$RUNNER_TEMP/full-s6-jwt-missing.log" 2>&1
+          status=$?
+          set -e
+          docker rm full-s6-jwt-missing >/dev/null 2>&1 || true
+          if [ "$status" -eq 0 ] || [ "$status" -eq 124 ]; then
+            cat "$RUNNER_TEMP/full-s6-jwt-missing.log"
+            echo 'container did not fail closed when JWT key was empty' >&2
+            exit 1
+          fi
+          grep -qF 'RUSTDESK_API_JWT_KEY is required when MUST_LOGIN=Y' \
+            "$RUNNER_TEMP/full-s6-jwt-missing.log"
+
+      - name: Register a desktop peer over WebSocket
+        shell: bash
+        run: |
+          docker run --detach --name full-s6-websocket \
+            --publish 127.0.0.1:21118:21118 \
+            --env RELAY=127.0.0.1:21117 \
+            --env MUST_LOGIN=Y \
+            --env RUSTDESK_API_JWT_KEY=integration-test-jwt-key-0123456789abcdef \
+            rustdesk-api:full-s6-integration
+          set +e
+          python3 tests/desktop_websocket_register.py \
+            --host 127.0.0.1 --port 21118 --deadline 45
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            docker logs full-s6-websocket
+          fi
+          docker rm --force full-s6-websocket >/dev/null
+          exit "$status"

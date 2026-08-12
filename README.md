@@ -51,6 +51,8 @@ flowchart TD
 - LDAP 认证失败时不会回退普通同名本地账户；可保留本地管理员作为应急入口。
 - GitHub、Google 和通用 OIDC 登录。
 - Web Client 自动获取 API、ID Server、Relay Server、公钥和地址簿。
+- 设备管理中的 `Web Client` 按钮使用内置 `/webclient/#/?id=...`；旧版
+  `/webclient2/#/<id>` 链接会由兼容页转换，不再返回 404。
 - 管理员临时分享 Web Client 连接。
 - Swagger API 文档和服务器命令管理。
 - CLI 重置管理员密码。
@@ -298,7 +300,8 @@ Compose 使用 `network_mode: host`。服务器防火墙至少需要按使用场
 | `21119` | TCP | WebSocket Relay |
 | `8000` | TCP | RDGEN 内部服务，必须保持仅本机访问 |
 
-`full-s6-generator` 默认从 `lejianwen/rustdesk-server-s6:v0.1.2` 复制
+`full-s6-generator` 默认从 `lejianwen/rustdesk-server-s6:v0.1.2` 的固定
+manifest digest 复制
 `hbbs` 和 `hbbr`。该 `forapi` 构建支持 RustDesk 桌面客户端（`>= 1.4.1`）
 直接通过 `21118/21119` 使用 WebSocket。若将构建参数
 `RUSTDESK_SERVER_IMAGE` 改回官方 `rustdesk/rustdesk-server-s6`，端口仍可能监听，
@@ -694,7 +697,8 @@ Swagger 默认不公开，可通过配置显式启用。
 普通 API 使用 `Dockerfile`，Full S6 使用 `Dockerfile_full_s6`，带客户端生成器的一体化镜像使用 `Dockerfile_full_s6_generator`。
 
 两份 Full S6 Dockerfile 默认固定使用
-`lejianwen/rustdesk-server-s6:v0.1.2`，以保留桌面客户端 WebSocket、
+`lejianwen/rustdesk-server-s6:v0.1.2@sha256:eabc3d1a845b0bbb717b819c36627a261931d7325fcf5dff0a8605645a3cce62`，
+以保留桌面客户端 WebSocket、
 `MUST_LOGIN` 和 JWT 校验。仅在明确接受这些功能差异时，才通过
 `RUSTDESK_SERVER_IMAGE` 构建参数替换服务端基础镜像。
 
@@ -722,7 +726,7 @@ RDGEN 的开发与测试说明见 [rdgen/README.md](rdgen/README.md)，完整生
 - 保持 `RDGEN_BIND_HOST=127.0.0.1`，禁止外部访问 `8000/tcp`。
 - GitHub Token 只授权 `AllenMGu/rustdesk-api`，不要授予账户级或其他仓库权限。
 - `RDGEN_SECRET_KEY`、`RDGEN_INTERNAL_TOKEN`、`RDGEN_ZIP_PASSWORD` 必须使用不同的随机值。
-- 设置 `MUST_LOGIN=Y` 时必须同时配置独立的 `RUSTDESK_API_JWT_KEY`，并在 API 与 hbbs 间保持一致。
+- 设置 `MUST_LOGIN=Y` 时必须同时配置独立的 `RUSTDESK_API_JWT_KEY`，并在 API 与 hbbs 间保持一致；密钥为空时容器会在启动 `hbbs` 前退出。
 - 不要把 `.env`、永久密码、GitHub Token、签名证书或 RustDesk 私钥提交到 Git。
 - 默认配置只会把 `/data/id_ed25519.pub` 公钥复制给生成器，私钥不会复制到 RDGEN。
 - 生成器中的永久密码会被嵌入客户端，泄露后应立即轮换并重新生成客户端。

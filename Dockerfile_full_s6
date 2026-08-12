@@ -1,5 +1,5 @@
 # The forapi build adds desktop-client WebSocket and MUST_LOGIN/JWT support.
-ARG RUSTDESK_SERVER_IMAGE=lejianwen/rustdesk-server-s6:v0.1.2
+ARG RUSTDESK_SERVER_IMAGE=lejianwen/rustdesk-server-s6:v0.1.2@sha256:eabc3d1a845b0bbb717b819c36627a261931d7325fcf5dff0a8605645a3cce62
 FROM ${RUSTDESK_SERVER_IMAGE} AS server
 
 FROM alpine
@@ -17,20 +17,26 @@ COPY --from=server /usr/bin/hbbr /usr/bin/hbbr
 COPY --from=server /usr/bin/hbbs /usr/bin/hbbs
 COPY --from=server /usr/bin/rustdesk-utils /usr/bin/rustdesk-utils
 COPY --from=server /command /command
+COPY docker/full-s6-common/rootfs/ /
 
 RUN \
   mkdir -p /etc/s6-overlay/s6-rc.d/api && \
+  if ! grep -qxF config-check /etc/s6-overlay/s6-rc.d/key-secret/dependencies 2>/dev/null; then \
+    printf "config-check\n" >> /etc/s6-overlay/s6-rc.d/key-secret/dependencies; \
+  fi && \
   echo -e "key-secret\nhbbs" > /etc/s6-overlay/s6-rc.d/api/dependencies && \
   echo "longrun" > /etc/s6-overlay/s6-rc.d/api/type && \
   echo "#!/command/with-contenv sh" > /etc/s6-overlay/s6-rc.d/api/run && \
   echo "cd /app" >> /etc/s6-overlay/s6-rc.d/api/run && \
   echo "./apimain" >> /etc/s6-overlay/s6-rc.d/api/run && \
   touch /etc/s6-overlay/s6-rc.d/user/contents.d/api && \
+  chmod 755 /etc/s6-overlay/s6-rc.d/config-check/up.real && \
   echo "/package/admin/s6/command/s6-svstat /run/s6-rc/servicedirs/api || exit 1" >> /usr/bin/healthcheck.sh && \
   ln -s /run /var/run
 
 ENV RELAY=relay.example.com
 ENV ENCRYPTED_ONLY=0
+ENV S6_BEHAVIOUR_IF_STAGE2_FAILS=2
 
 VOLUME /data
 VOLUME /app/data

@@ -1,5 +1,5 @@
 # The forapi build adds desktop-client WebSocket and MUST_LOGIN/JWT support.
-ARG RUSTDESK_SERVER_IMAGE=lejianwen/rustdesk-server-s6:v0.1.2
+ARG RUSTDESK_SERVER_IMAGE=lejianwen/rustdesk-server-s6:v0.1.2@sha256:eabc3d1a845b0bbb717b819c36627a261931d7325fcf5dff0a8605645a3cce62
 FROM ${RUSTDESK_SERVER_IMAGE} AS server
 
 FROM --platform=$BUILDPLATFORM node:20-alpine AS web
@@ -29,6 +29,8 @@ RUN mkdir -p \
       /opt/rustdesk-api-web/src/views/rdgen/index.vue \
     && node /tmp/web-overrides/patch-router.mjs \
       /opt/rustdesk-api-web/src/router/index.js \
+    && node /tmp/web-overrides/patch-webclient.mjs \
+      /opt/rustdesk-api-web/src/utils/webclient.js \
     && cd /opt/rustdesk-api-web \
     && npm ci \
       --registry=https://registry.npmjs.org \
@@ -74,10 +76,14 @@ COPY --from=server /usr/bin/hbbs /usr/bin/hbbs
 COPY --from=server /usr/bin/rustdesk-utils /usr/bin/rustdesk-utils
 COPY --from=server /command /command
 
+COPY docker/full-s6-common/rootfs/ /
 COPY docker/full-s6-generator/rootfs/ /
 
 RUN addgroup -S rdgen \
     && adduser -S -D -H -h /opt/rdgen -G rdgen rdgen \
+    && if ! grep -qxF config-check /etc/s6-overlay/s6-rc.d/key-secret/dependencies 2>/dev/null; then \
+      printf "config-check\n" >> /etc/s6-overlay/s6-rc.d/key-secret/dependencies; \
+    fi \
     && mkdir -p \
       /etc/s6-overlay/s6-rc.d/api \
       /opt/rdgen/data \
@@ -95,6 +101,7 @@ RUN addgroup -S rdgen \
     && touch /etc/s6-overlay/s6-rc.d/user/contents.d/api \
     && chmod 755 \
       /etc/s6-overlay/s6-rc.d/api/run \
+      /etc/s6-overlay/s6-rc.d/config-check/up.real \
       /etc/s6-overlay/s6-rc.d/rdgen/run \
       /etc/s6-overlay/s6-rc.d/rdgen-poller/run \
       /etc/s6-overlay/s6-rc.d/rdgen-prepare/run \
@@ -112,6 +119,7 @@ RUN addgroup -S rdgen \
 
 ENV RELAY=relay.example.com \
     ENCRYPTED_ONLY=0 \
+    S6_BEHAVIOUR_IF_STAGE2_FAILS=2 \
     PYTHONUNBUFFERED=1 \
     DATABASE_PATH=/opt/rdgen/data/db.sqlite3 \
     RDGEN_PORT=8000 \
