@@ -732,7 +732,7 @@ Web Client V1 不是只提供 `main.dart.js`。完整对应源码单独发布在
 当前界面修改以完整 Dart 源码保存在子模块的 `overrides/flutter/`，构建时覆盖固定
 V1 源码快照。它只更新顶栏、连接卡片、最近会话和菜单视觉，不声称是 RustDesk
 1.4.9 预览 Web 核心的构建。更新后 `main.dart.js` SHA-256 为
-`2112e6feed7220924ad1022b73d175d4d2c608cf9e07038bf4973e6a4c05838e`。
+`fef91c15fa4b29d527878aea9f0a923b8b53a6aaaee4d99c61c926caddc74253`。
 
 分类导航参考 Web Client V2，但浏览器不具备桌面客户端 UDP 局域网发现能力。因此
 “设备”分类显示当前登录账号在 API 中已登记的设备及心跳在线状态，而不是不可靠的

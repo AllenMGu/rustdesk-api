@@ -8,13 +8,14 @@ import (
 )
 
 type WebClientPeerPayload struct {
-	ViewStyle   string                   `json:"view-style"`
-	Tm          int64                    `json:"tm"`
-	Info        WebClientPeerInfoPayload `json:"info"`
-	Tmppwd      string                   `json:"tmppwd"`
-	AddressBook  bool                     `json:"address_book"`
-	AddressBooks []string                 `json:"address_books"`
-	Managed      bool                     `json:"managed"`
+	ViewStyle         string                              `json:"view-style"`
+	Tm                int64                               `json:"tm"`
+	Info              WebClientPeerInfoPayload            `json:"info"`
+	Tmppwd            string                              `json:"tmppwd"`
+	AddressBook       bool                                `json:"address_book"`
+	AddressBooks      []string                            `json:"address_books"`
+	AddressBookDetails map[string]WebClientPeerInfoPayload `json:"address_book_details"`
+	Managed           bool                                `json:"managed"`
 }
 
 type WebClientAddressBookPayload struct {
@@ -42,15 +43,18 @@ func (wcpp *WebClientPeerPayload) FromAddressBook(a *model.AddressBook) {
 	wcpp.AddressBook = true
 	//24小时前
 	wcpp.Tm = time.Now().Add(-time.Hour * 24).UnixNano()
-	tags := WebClientAddressBookTags(a)
-	wcpp.Info = WebClientPeerInfoPayload{
+	wcpp.Info = WebClientPeerInfoFromAddressBook(a)
+}
+
+func WebClientPeerInfoFromAddressBook(a *model.AddressBook) WebClientPeerInfoPayload {
+	return WebClientPeerInfoPayload{
 		Username: a.Username,
 		Hostname: a.Hostname,
 		Platform: a.Platform,
 		Hash:     a.Hash,
 		Id:       a.Id,
 		Alias:    a.Alias,
-		Tags:     tags,
+		Tags:     WebClientAddressBookTags(a),
 		Online:   a.Online,
 	}
 }
@@ -73,6 +77,10 @@ func (wcpp *WebClientPeerPayload) AddAddressBook(guid string) {
 
 func (wcpp *WebClientPeerPayload) MergeAddressBook(a *model.AddressBook, guid string) {
 	wcpp.AddAddressBook(guid)
+	if wcpp.AddressBookDetails == nil {
+		wcpp.AddressBookDetails = make(map[string]WebClientPeerInfoPayload)
+	}
+	wcpp.AddressBookDetails[guid] = WebClientPeerInfoFromAddressBook(a)
 	tags := WebClientAddressBookTags(a)
 	seen := make(map[string]bool, len(wcpp.Info.Tags))
 	for _, tag := range wcpp.Info.Tags {

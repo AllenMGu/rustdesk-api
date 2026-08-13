@@ -62,7 +62,7 @@ const WEBCLIENT_LANGS: any = {
     "About": "关于",
     "Theme": "主题",
     "Light": "明亮",
-    "Dark": "黑暗",
+    "Dark": "深色",
     "Follow system": "跟随系统",
     "Language": "语言",
     "Other": "其他",

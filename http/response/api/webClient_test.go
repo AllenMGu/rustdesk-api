@@ -30,12 +30,23 @@ func TestWebClientPeerFromAddressBook(t *testing.T) {
 		t.Fatalf("address book tags were not preserved: %#v", peer.Info.Tags)
 	}
 	peer.MergeAddressBook(&model.AddressBook{
-		Id:   "123456789",
-		Tags: custom_types.AutoJson([]byte(`["GMP","Shared"]`)),
+		Id:    "123456789",
+		Alias: "Personal alias",
+		Tags:  custom_types.AutoJson([]byte(`["GMP","Wuxi"]`)),
+	}, "1-2-0")
+	peer.MergeAddressBook(&model.AddressBook{
+		Id:    "123456789",
+		Alias: "Shared alias",
+		Tags:  custom_types.AutoJson([]byte(`["Shared"]`)),
 	}, "1-2-3")
 	peer.AddAddressBook("1-2-3")
-	if len(peer.AddressBooks) != 1 || peer.AddressBooks[0] != "1-2-3" {
+	if len(peer.AddressBooks) != 2 || peer.AddressBooks[1] != "1-2-3" {
 		t.Fatalf("address book membership was not preserved: %#v", peer.AddressBooks)
+	}
+	if peer.AddressBookDetails["1-2-0"].Alias != "Personal alias" ||
+		peer.AddressBookDetails["1-2-3"].Alias != "Shared alias" ||
+		peer.AddressBookDetails["1-2-3"].Tags[0] != "Shared" {
+		t.Fatalf("per-address-book metadata was not preserved: %#v", peer.AddressBookDetails)
 	}
 	if len(peer.Info.Tags) != 3 || peer.Info.Tags[2] != "Shared" {
 		t.Fatalf("address book tags were not merged: %#v", peer.Info.Tags)

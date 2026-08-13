@@ -136,7 +136,8 @@ export default class Connection {
 
   async connectRelay(rr: rendezvous.RelayResponse) {
     const pk = rr.pk;
-    let uri = rr.relay_server;
+    const customRelay = localStorage.getItem("relay-server");
+    let uri = customRelay || rr.relay_server;
     if (uri) {
       uri = getrUriFromRs(uri, true, 2);
     } else {
