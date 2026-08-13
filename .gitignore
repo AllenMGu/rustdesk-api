@@ -5,6 +5,7 @@ runtime/*
 go.sum
 resources/admin
 release
+webclient-v1/build/
 data/rustdeskapi.db
 data/api/rdgen-client-defaults.json
 data/ldap-settings.json

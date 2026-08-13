@@ -12,6 +12,7 @@ data/
 
 # Ignore version control system directories
 .git/
+**/.git
 
 # Ignore log and temporary files
 *.log
@@ -24,6 +25,8 @@ data/
 
 # Ignore binaries and build cache
 release/
+webclient-v1/build/
+**/node_modules/
 bin/
 *.exe
 *.out

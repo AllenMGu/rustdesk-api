@@ -31,6 +31,7 @@ RUN mkdir -p \
       /opt/rustdesk-api-web/src/router/index.js \
     && node /tmp/web-overrides/patch-webclient.mjs \
       /opt/rustdesk-api-web/src/utils/webclient.js \
+      /opt/rustdesk-api-web/src/views/address_book/components/shareByWebClient.vue \
     && cd /opt/rustdesk-api-web \
     && npm ci \
       --registry=https://registry.npmjs.org \

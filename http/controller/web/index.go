@@ -2,6 +2,8 @@ package web
 
 import (
 	"fmt"
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
 )
@@ -15,20 +17,7 @@ func (i *Index) Index(c *gin.Context) {
 
 func (i *Index) ConfigJs(c *gin.Context) {
 	apiServer := global.Config.Rustdesk.ApiServer
-	magicQueryonline := global.Config.Rustdesk.WebclientMagicQueryonline
-	tmp := fmt.Sprintf(`localStorage.setItem('api-server', '%v');
-const ws2_prefix = 'wc-';
-localStorage.setItem(ws2_prefix+'api-server', '%v');
-
-window.webclient_magic_queryonline = %d;
-window.ws_host = '%v';
-`, apiServer, apiServer, magicQueryonline, global.Config.Rustdesk.WsHost)
-	//	tmp := `
-	//localStorage.setItem('api-server', "` + apiServer + `")
-	//const ws2_prefix = 'wc-'
-	//localStorage.setItem(ws2_prefix+'api-server', "` + apiServer + `")
-	//
-	//window.webclient_magic_queryonline = ` + magicQueryonline + ``
+	tmp := fmt.Sprintf("localStorage.setItem('api-server', %s);\n", strconv.Quote(apiServer))
 
 	c.Header("Content-Type", "application/javascript")
 	c.String(200, tmp)

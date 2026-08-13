@@ -19,3 +19,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+RustDesk Web Client component
+-----------------------------
+
+Files under webclient-v1/ and resources/web/ are not relicensed by the MIT
+license above. They are RustDesk Web Client code and corresponding build
+materials distributed under the GNU Affero General Public License, version 3.
+The complete AGPL text, original copyright declarations, and third-party
+notices are preserved in webclient-v1/LICENCE and the accompanying complete
+source archive.

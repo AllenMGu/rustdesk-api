@@ -34,11 +34,13 @@ permissions:
 
 jobs:
   webclient:
-    name: Web Client links and routes
+    name: Web Client links, names, and routes
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Checkout upstream admin UI
         uses: actions/checkout@v4
@@ -56,15 +58,18 @@ jobs:
         shell: bash
         run: |
           node docker/full-s6-generator/web-overrides/patch-webclient.mjs \
-            rustdesk-api-web/src/utils/webclient.js
-          if grep -qF '/webclient2/' rustdesk-api-web/src/utils/webclient.js; then
-            echo 'webclient2 link remains after patch' >&2
+            rustdesk-api-web/src/utils/webclient.js \
+            rustdesk-api-web/src/views/address_book/components/shareByWebClient.vue
+          if grep -qE '/webclientv?[0-9]+/' rustdesk-api-web/src/utils/webclient.js; then
+            echo 'numbered Web Client route remains after patch' >&2
             exit 1
           fi
           grep -qF '/webclient/#/?id=${encodeURIComponent(row.id)}' \
             rustdesk-api-web/src/utils/webclient.js
           grep -qF '/webclient/#/?share_token=${encodeURIComponent(token)}' \
             rustdesk-api-web/src/utils/webclient.js
+          grep -qF 'getShareUrl' \
+            rustdesk-api-web/src/views/address_book/components/shareByWebClient.vue
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -72,7 +77,7 @@ jobs:
           go-version: '1.23'
           cache: false
 
-      - name: Test legacy Web Client redirect
+      - name: Test Web Client route
         run: go test -mod=mod ./http/router
 
   desktop-websocket:
@@ -82,6 +87,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Verify pinned server image
         shell: bash
