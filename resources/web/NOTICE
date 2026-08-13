@@ -8,6 +8,14 @@ Upstream source:
   https://github.com/JelleBuning/rustdesk
   commit 47a7b7313bb906ebdae36bd16838bdefa8853639
 
+UI design reference:
+  https://github.com/rustdesk/rustdesk
+  release 1.4.9, commit 6c578292e8ebbbec708b76986ba8c4bc7c509747
+
+Modified Flutter UI source is provided in overrides/flutter/. The V1
+transport, WebSocket bridge, API integration, and fixed upstream source
+baseline remain independently identifiable and reproducible.
+
 The complete corresponding source, original copyright notices, third-party
 notices, dependency lock files, and reproducible build instructions accompany
 the binary. Do not remove them when redistributing this component.

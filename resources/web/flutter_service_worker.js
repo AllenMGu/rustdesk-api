@@ -4,11 +4,11 @@ const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 const RESOURCES = {
   "AGPL-3.0.txt": "4ae09d45eac4aa08d013b5f2e01c67f6",
-  "NOTICE": "a3b1ca5091e0741b6b6e751c977cbbe8",
-  "SOURCE.html": "a41ec84ad15100f53c751f150420064f",
+  "NOTICE": "0523caff40e22493a524ffeb38d60058",
+  "SOURCE.html": "74614c9eb6d39a38658eaea308c39ffc",
   "assets/AssetManifest.json": "8d7619e36fd23ae0a6e072735d05043f",
   "assets/FontManifest.json": "1053b6a7ac98b1998f83026f68cea87b",
-  "assets/NOTICES": "7b68ec67708c0f4f74502224f68bdd93",
+  "assets/NOTICES": "5550015e65deb04cb66d6d6a7719a454",
   "assets/assets/android.png": "3856527a965dad9a4b4625ec5c83ed1b",
   "assets/assets/gestures.ttf": "a70c60208ba07ce378ed9a5cf8aa586b",
   "assets/assets/insecure.png": "83eb7acf1ccc3fc61da4a5b24c5c2097",
@@ -21,12 +21,17 @@ const RESOURCES = {
   "assets/fonts/MaterialIcons-Regular.otf": "e7069dfd19b331be16bed984668fe080",
   "assets/packages/cupertino_icons/assets/CupertinoIcons.ttf": "6d342eb68f170c97609e9da345464e5e",
   "assets/packages/wakelock_web/assets/no_sleep.js": "7748a45cd593f33280669b29c2c8919a",
+  "canvaskit/canvaskit.js": "97937cb4c2c2073c968525a3e08c86a3",
+  "canvaskit/canvaskit.wasm": "3de12d898ec208a5f31362cc00f09b9e",
+  "canvaskit/profiling/canvaskit.js": "c21852696bc1cc82e8894d851c01921a",
+  "canvaskit/profiling/canvaskit.wasm": "371bc4e204443b0d5e774d64a046eb99",
   "favicon.svg": "8452bf248b5b5519dea5f3c724bbac9d",
+  "flutter.js": "a85fcf6324d3c4d3ae3be1ae4931e9c5",
   "icons/Icon-192.png": "ecb50d026dad007de7c81e675bda5ab7",
   "icons/Icon-512.png": "363d0fbd6c49a37ee01b9afad0849d86",
   "icons/Icon-maskable-192.png": "5496a0a956a65451bb26d515a8365838",
   "icons/Icon-maskable-512.png": "7f03ce96eb8a827eb1a8dd06a5ebc638",
-  "index.html": "6ec8fbada5c2d0c163ecedd4d8506ce6",
+  "index.html": "75640f3308e87fcd8e044a8e1c6c4085",
   "js/dist/index.css": "325598511be4c5926c2e5bd308a3ea4c",
   "js/dist/index.html": "85716a9a0538b47b808045f6923bc8d8",
   "js/dist/index.js": "d6088775247ee89ec8ae669e9d837f5e",
@@ -56,7 +61,7 @@ const RESOURCES = {
   "libopus.wasm": "b8801d4a953d58e739fd9d25134467d3",
   "libs/firebase-analytics.js": "c6fcb4296681957bc1dd5fcd8e7eee50",
   "libs/firebase-app.js": "f61459b893c6422d6e8e96e8aa5fbdcd",
-  "main.dart.js": "cb251c69a54d60081a5e54365f49f654",
+  "main.dart.js": "09cc6a315cbc52be77565ae727d2086f",
   "manifest.json": "18e53390c166023eb5b32e95b324ec2b",
   "ogvjs-1.8.6/COPYING": "d35e32d19d3d58a88cd0bc98e94a9073",
   "ogvjs-1.8.6/COPYING-dav1d.txt": "c8055cfe7548dfdaa3a6dc45d8793669",
@@ -116,7 +121,7 @@ const RESOURCES = {
   "yuv-canvas-1.2.6.js": "c4ace642c725cf918ed9440426b583b8",
   "yuv.js": "5cff03855bc9577b6104b9743ff26790",
   "yuv.wasm": "443e8cb7b56fff2550ce0a411f3a05eb",
-  "/": "6ec8fbada5c2d0c163ecedd4d8506ce6"
+  "/": "75640f3308e87fcd8e044a8e1c6c4085"
 };
 
 // The application shell files that are downloaded before a service worker can
