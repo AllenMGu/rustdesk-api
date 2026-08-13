@@ -56,10 +56,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23.10'
-          cache: true
+          cache: false
 
       - name: Test Web Client API payloads
-        run: go test ./http/response/api ./http/controller/api
+        run: go test -mod=mod ./http/response/api ./http/controller/api
 
       - name: Verify fixed upstream tree and AGPL license
         run: ./webclient-v1/verify-source.sh
