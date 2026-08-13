@@ -1,12 +1,16 @@
 package api
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/lejianwen/rustdesk-api/v2/global"
 	"github.com/lejianwen/rustdesk-api/v2/http/response"
 	"github.com/lejianwen/rustdesk-api/v2/http/response/api"
+	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
-	"time"
+	"github.com/lejianwen/rustdesk-api/v2/utils"
 )
 
 type WebClient struct {
@@ -26,12 +30,52 @@ func (i *WebClient) ServerConfig(c *gin.Context) {
 	u := service.AllService.UserService.CurUser(c)
 
 	peers := map[string]*api.WebClientPeerPayload{}
-	abs := service.AllService.AddressBookService.ListByUserIdAndCollectionId(u.Id, 0, 1, 1000)
-	for _, ab := range abs.AddressBooks {
-		pp := &api.WebClientPeerPayload{}
-		pp.FromAddressBook(ab)
-		peers[ab.Id] = pp
+	addressBooks := make([]*api.WebClientAddressBookPayload, 0)
+	addAddressBook := func(owner *model.User, collectionID uint, name string, rule int) {
+		guid := fmt.Sprintf("%d-%d-%d", owner.GroupId, owner.Id, collectionID)
+		profile := &api.WebClientAddressBookPayload{
+			Guid: guid, Name: name, Owner: owner.Username, Rule: rule, Tags: make([]string, 0),
+		}
+		seenTags := map[string]bool{}
+		abs := service.AllService.AddressBookService.ListByUserIdAndCollectionId(owner.Id, collectionID, 1, 1000)
+		for _, ab := range abs.AddressBooks {
+			for _, tag := range api.WebClientAddressBookTags(ab) {
+				if tag != "" && !seenTags[tag] {
+					profile.Tags = append(profile.Tags, tag)
+					seenTags[tag] = true
+				}
+			}
+			pp, exists := peers[ab.Id]
+			if !exists {
+				pp = &api.WebClientPeerPayload{}
+				pp.FromAddressBook(ab)
+				peers[ab.Id] = pp
+			}
+			pp.MergeAddressBook(ab, guid)
+		}
+		addressBooks = append(addressBooks, profile)
 	}
+
+	addAddressBook(u, 0, u.Username, model.ShareAddressBookRuleRuleFullControl)
+	ownedCollections := service.AllService.AddressBookService.ListCollectionByUserId(u.Id)
+	for _, collection := range ownedCollections.AddressBookCollection {
+		addAddressBook(u, collection.Id, collection.Name, model.ShareAddressBookRuleRuleFullControl)
+	}
+
+	maxRules := map[uint]int{}
+	for _, rule := range service.AllService.AddressBookService.CollectionReadRules(u) {
+		if rule.Rule > maxRules[rule.CollectionId] {
+			maxRules[rule.CollectionId] = rule.Rule
+		}
+	}
+	for _, collection := range service.AllService.AddressBookService.ListCollectionByIds(utils.Keys(maxRules)) {
+		owner := service.AllService.UserService.InfoById(collection.UserId)
+		if owner == nil || owner.Id == 0 || owner.Id == u.Id {
+			continue
+		}
+		addAddressBook(owner, collection.Id, collection.Name, maxRules[collection.Id])
+	}
+
 	devices := service.AllService.PeerService.ListByUserIds([]uint{u.Id}, 1, 1000)
 	for _, device := range devices.Peers {
 		if existing, ok := peers[device.Id]; ok {
@@ -60,9 +104,10 @@ func (i *WebClient) ServerConfig(c *gin.Context) {
 	response.Success(
 		c,
 		gin.H{
-			"id_server": global.Config.Rustdesk.IdServer,
-			"key":       global.Config.Rustdesk.Key,
-			"peers":     peers,
+			"id_server":    global.Config.Rustdesk.IdServer,
+			"key":          global.Config.Rustdesk.Key,
+			"peers":        peers,
+			"address_books": addressBooks,
 		},
 	)
 }

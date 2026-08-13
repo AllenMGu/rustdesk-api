@@ -29,6 +29,17 @@ func TestWebClientPeerFromAddressBook(t *testing.T) {
 	if len(peer.Info.Tags) != 2 || peer.Info.Tags[0] != "GMP" {
 		t.Fatalf("address book tags were not preserved: %#v", peer.Info.Tags)
 	}
+	peer.MergeAddressBook(&model.AddressBook{
+		Id:   "123456789",
+		Tags: custom_types.AutoJson([]byte(`["GMP","Shared"]`)),
+	}, "1-2-3")
+	peer.AddAddressBook("1-2-3")
+	if len(peer.AddressBooks) != 1 || peer.AddressBooks[0] != "1-2-3" {
+		t.Fatalf("address book membership was not preserved: %#v", peer.AddressBooks)
+	}
+	if len(peer.Info.Tags) != 3 || peer.Info.Tags[2] != "Shared" {
+		t.Fatalf("address book tags were not merged: %#v", peer.Info.Tags)
+	}
 }
 
 func TestWebClientPeerFromManagedDevice(t *testing.T) {

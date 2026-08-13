@@ -205,6 +205,9 @@ window.setByName = (name, value) => {
         case 'reconnect':
             curConn.reconnect();
             break;
+        case 'reload':
+            window.location.reload();
+            break;
         case 'toggle_option':
             curConn.toggleOption(value);
             break;
@@ -351,6 +354,7 @@ function getPeerCatalogForDart() {
             last_connected: Number(lastConnected),
             favorite: favorites.has(id),
             address_book: Boolean(value.address_book),
+            address_books: Array.isArray(value.address_books) ? value.address_books : [],
             managed: Boolean(value.managed),
         });
     }
@@ -369,6 +373,12 @@ function _getByName(name, arg) {
             return getPeersForDart();
         case 'peer_catalog':
             return getPeerCatalogForDart();
+        case 'address_book_catalog':
+            try {
+                return JSON.parse(localStorage.getItem('webclient-address-books')) || [];
+            } catch (e) {
+                return [];
+            }
         case 'remote_id':
             return localStorage.getItem('remote-id');
         case 'remember':

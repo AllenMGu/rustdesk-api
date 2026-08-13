@@ -11,6 +11,8 @@ on:
       - 'http/router/**'
       - 'http/controller/web/**'
       - 'http/controller/api/webClient.go'
+      - 'http/response/api/webClient.go'
+      - 'http/response/api/webClient_test.go'
       - 'docker/full-s6-generator/web-overrides/**'
       - 'Dockerfile.dev'
       - 'Dockerfile_full_s6_generator'
@@ -29,6 +31,8 @@ on:
       - 'http/router/**'
       - 'http/controller/web/**'
       - 'http/controller/api/webClient.go'
+      - 'http/response/api/webClient.go'
+      - 'http/response/api/webClient_test.go'
       - 'docker/full-s6-generator/web-overrides/**'
       - 'Dockerfile.dev'
       - 'Dockerfile_full_s6_generator'
@@ -48,6 +52,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.10'
+          cache: true
+
+      - name: Test Web Client API payloads
+        run: go test ./http/response/api ./http/controller/api
 
       - name: Verify fixed upstream tree and AGPL license
         run: ./webclient-v1/verify-source.sh
@@ -85,6 +97,7 @@ jobs:
             | grep -qxF flutter/pubspec.lock
           test -f webclient-v1/integration/resources-web-js/yarn.lock
           test -f webclient-v1/overrides/flutter/lib/webclient_theme.dart
+          test -f webclient-v1/overrides/flutter/lib/pages/web_settings_page.dart
           test -f resources/web/SOURCE.html
 
   build:
@@ -124,7 +137,7 @@ jobs:
             --create --directory=/tmp/webclient-build-b .
           cmp /tmp/webclient-build-a.tar /tmp/webclient-build-b.tar
           printf '%s  %s\n' \
-            82dcac8f2d4c36327c9d56a0fef492f4e4db92d1960277318014e5b7f06fda85 \
+            2112e6feed7220924ad1022b73d175d4d2c608cf9e07038bf4973e6a4c05838e \
             /tmp/webclient-build-a/main.dart.js \
             | sha256sum --check --strict
           cmp /tmp/webclient-build-a/main.dart.js resources/web/main.dart.js

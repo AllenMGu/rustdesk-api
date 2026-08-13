@@ -70,9 +70,25 @@ export function getServerConf(token){
                 localStorage.setItem('custom-rendezvous-server', res.data.id_server)
                 localStorage.setItem('key', res.data.key)
             }
+            const books = Array.isArray(res.data.address_books) ? res.data.address_books : []
+            const oldBooks = localStorage.getItem('webclient-address-books') || '[]'
+            const newBooks = JSON.stringify(books)
+            let catalogChanged = oldBooks !== newBooks
+            localStorage.setItem('webclient-address-books', newBooks)
             if (res.data.peers) {
                 const oldPeers = JSON.parse(localStorage.getItem('peers')) || {}
                 let needUpdate = false
+                const serverPeerIds = new Set(Object.keys(res.data.peers))
+                Object.keys(oldPeers).forEach(k => {
+                    if (!serverPeerIds.has(k) && oldPeers[k].address_book) {
+                        oldPeers[k].address_book = false
+                        oldPeers[k].address_books = []
+                        if (!oldPeers[k].managed && !oldPeers[k].last_connected) {
+                            delete oldPeers[k]
+                        }
+                        needUpdate = true
+                    }
+                })
                 Object.keys(res.data.peers).forEach(k => {
                     if (!oldPeers[k]) {
                         oldPeers[k] = res.data.peers[k]
@@ -81,14 +97,17 @@ export function getServerConf(token){
                         const before = JSON.stringify({
                             info: oldPeers[k].info,
                             address_book: oldPeers[k].address_book,
+                            address_books: oldPeers[k].address_books,
                             managed: oldPeers[k].managed,
                         })
                         oldPeers[k].info = res.data.peers[k].info
                         oldPeers[k].address_book = Boolean(res.data.peers[k].address_book)
+                        oldPeers[k].address_books = Array.isArray(res.data.peers[k].address_books) ? res.data.peers[k].address_books : []
                         oldPeers[k].managed = Boolean(res.data.peers[k].managed)
                         const after = JSON.stringify({
                             info: oldPeers[k].info,
                             address_book: oldPeers[k].address_book,
+                            address_books: oldPeers[k].address_books,
                             managed: oldPeers[k].managed,
                         })
                         if (before !== after) {
@@ -103,7 +122,7 @@ export function getServerConf(token){
                     }
                 })
                 localStorage.setItem('peers', JSON.stringify(oldPeers))
-                if (needUpdate) {
+                if (needUpdate || catalogChanged) {
                     window.location.reload()
                 }
             }

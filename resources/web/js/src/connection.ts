@@ -62,6 +62,7 @@ export default class Connection {
     if (!this._options) {
       this._options = globals.getPeers()[id] || {};
     }
+    this.applyWebClientDefaults();
     if (!this._password) {
       const p = this.getOption("password");
       if (p) {
@@ -547,6 +548,37 @@ export default class Connection {
 
   getRemember(): Boolean {
     return this._options["remember"] || false;
+  }
+
+  applyWebClientDefaults() {
+    const setDefault = (name: string, value: any) => {
+      if (this._options[name] == undefined && value != undefined && value !== "") {
+        this._options[name] = value;
+      }
+    };
+    setDefault(
+      "view-style",
+      localStorage.getItem("webclient-default-view-style") || "shrink"
+    );
+    const adaptive = localStorage.getItem("webclient-adaptive-bitrate") !== "false";
+    setDefault(
+      "image-quality",
+      adaptive
+        ? "balanced"
+        : localStorage.getItem("webclient-default-image-quality") || "balanced"
+    );
+    setDefault(
+      "show-remote-cursor",
+      localStorage.getItem("webclient-show-remote-cursor") !== "false"
+    );
+    setDefault(
+      "disable-audio",
+      localStorage.getItem("webclient-enable-audio") === "false"
+    );
+    setDefault(
+      "disable-clipboard",
+      localStorage.getItem("webclient-enable-clipboard") === "false"
+    );
   }
 
   setRemember(v: Boolean) {
