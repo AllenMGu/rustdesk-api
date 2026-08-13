@@ -51,7 +51,6 @@ if (share_token) {
 
 let fetching = false
 export function getServerConf(token){
-    console.log('getServerConf', token)
     if(fetching){
         return
     }
@@ -140,7 +139,11 @@ export function getServerConf(token){
                     }
                 })
                 localStorage.setItem('peers', JSON.stringify(oldPeers))
-                if (needUpdate || catalogChanged) {
+                // A reload tears down the active relay WebSocket. In particular,
+                // handlePeerInfo() updates the local peer immediately after login,
+                // so a concurrent server-config response can otherwise reload the
+                // page just as the first video frame arrives.
+                if ((needUpdate || catalogChanged) && !window.curConn) {
                     window.location.reload()
                 }
             }
