@@ -54,6 +54,8 @@ flowchart TD
 - Web Client 自动获取 API、ID Server、Relay Server、公钥和地址簿。
 - 设备管理中的 `Web Client` 按钮使用内置 V1 路径
   `/webclient/#/?id=...`。已删除另一套编号客户端路由、配置与 API。
+- Web Client V1 采用参考 RustDesk 1.4.9 客户端的响应式新界面，同时保留现有
+  V1 连接协议、API 自动登录、服务器配置、分享链接和地址簿兼容性。
 - 管理员临时分享 Web Client 连接。
 - Web Client 页面显著提供 AGPL 源码入口；发行包和容器同时包含
   独立仓库 [`AllenMGu/webclient-v1`](https://github.com/AllenMGu/webclient-v1)
@@ -720,6 +722,11 @@ Web Client V1 不是只提供 `main.dart.js`。完整对应源码单独发布在
 `webclient-v1` Git 子模块固定精确提交。其完整 RustDesk 源码固定在
 [`JelleBuning/rustdesk@47a7b7313bb906ebdae36bd16838bdefa8853639`](https://github.com/JelleBuning/rustdesk/commit/47a7b7313bb906ebdae36bd16838bdefa8853639)，
 并保留 GNU AGPL v3 全文、原始版权声明和第三方通知。校验与构建：
+
+当前界面修改以完整 Dart 源码保存在子模块的 `overrides/flutter/`，构建时覆盖固定
+V1 源码快照。它只更新顶栏、连接卡片、最近会话和菜单视觉，不声称是 RustDesk
+1.4.9 预览 Web 核心的构建。更新后 `main.dart.js` SHA-256 为
+`d92ca6461822b1d0013c4af9024e994f56914e2b8303b6555a5f9041138e971c`。
 
 ```bash
 ./webclient-v1/verify-source.sh

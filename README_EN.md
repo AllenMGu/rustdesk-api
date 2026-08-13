@@ -131,6 +131,7 @@ displaying data.Frontend code is available at [rustdesk-api-web](https://github.
 4. The address book will also be automatically saved to the web client for convenient use.
 5. Only the bundled V1 route is registered. The other numbered client route and its API/configuration have been removed.
 6. Complete corresponding source, the AGPL license, original copyright notices, and reproducible build instructions are maintained in the standalone [`AllenMGu/webclient-v1`](https://github.com/AllenMGu/webclient-v1) repository and pinned here as a Git submodule—not supplied merely as `main.dart.js`.
+7. The V1 landing interface now follows RustDesk 1.4.9's responsive visual language while retaining the existing V1 transport, API auto-login, server configuration, sharing links, and address-book compatibility. All modified Dart files are published under `webclient-v1/overrides/flutter/` and applied during the reproducible source build.
 
 ### Automated Documentation : API documentation is generated using Swag, making it easier for developers to understand and use the API.
 
