@@ -1,0 +1,135 @@
+name: Web Client V1 Source and Reproducibility
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.gitmodules'
+      - 'webclient-v1'
+      - 'webclient-v1/**'
+      - 'resources/web/**'
+      - 'http/router/**'
+      - 'http/controller/web/**'
+      - 'http/controller/api/webClient.go'
+      - 'docker/full-s6-generator/web-overrides/**'
+      - 'Dockerfile.dev'
+      - 'Dockerfile_full_s6_generator'
+      - 'conf/config.yaml'
+      - 'config/rustdesk.go'
+      - 'docs/**'
+      - '.github/workflows/webclient-v1.yml'
+  push:
+    branches:
+      - master
+    paths:
+      - '.gitmodules'
+      - 'webclient-v1'
+      - 'webclient-v1/**'
+      - 'resources/web/**'
+      - 'http/router/**'
+      - 'http/controller/web/**'
+      - 'http/controller/api/webClient.go'
+      - 'docker/full-s6-generator/web-overrides/**'
+      - 'Dockerfile.dev'
+      - 'Dockerfile_full_s6_generator'
+      - 'conf/config.yaml'
+      - 'config/rustdesk.go'
+      - 'docs/**'
+      - '.github/workflows/webclient-v1.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    name: Verify complete corresponding source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Verify fixed upstream tree and AGPL license
+        run: ./webclient-v1/verify-source.sh
+
+      - name: Verify runtime disclosure and cache manifest
+        run: |
+          node webclient-v1/postprocess.mjs \
+            resources/web \
+            webclient-v1/SOURCE.html \
+            webclient-v1/NOTICE \
+            webclient-v1/LICENCE
+          git diff --exit-code -- resources/web
+
+      - name: Reject removed numbered client artifacts
+        shell: bash
+        run: |
+          removed_pattern='webclientv?[0-9]+|server-config-[0-9]+|WEBCLIENT_V[0-9]+|getV[0-9]+ShareUrl'
+          if rg --line-number --ignore-case \
+            "${removed_pattern}" \
+            --glob '!webclient-v1/*.tar' .; then
+            echo 'removed numbered Web Client artifact found' >&2
+            exit 1
+          fi
+          if git ls-files --cached --others --exclude-standard \
+            | rg --line-number --ignore-case "${removed_pattern}"; then
+            echo 'removed numbered Web Client filename found' >&2
+            exit 1
+          fi
+
+      - name: Verify disclosure files
+        run: |
+          test -f webclient-v1/LICENCE
+          test -f webclient-v1/rustdesk-source-47a7b7313bb906ebdae36bd16838bdefa8853639.tar
+          tar -tf webclient-v1/rustdesk-source-47a7b7313bb906ebdae36bd16838bdefa8853639.tar \
+            | grep -qxF flutter/pubspec.lock
+          test -f webclient-v1/integration/resources-web-js/yarn.lock
+          test -f resources/web/SOURCE.html
+
+  build:
+    name: Build twice and compare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: First source build
+        run: |
+          docker build --platform linux/amd64 \
+            --file webclient-v1/Dockerfile \
+            --output type=local,dest=/tmp/webclient-build-a \
+            webclient-v1
+
+      - name: Second source build
+        run: |
+          docker build --no-cache --platform linux/amd64 \
+            --file webclient-v1/Dockerfile \
+            --output type=local,dest=/tmp/webclient-build-b \
+            webclient-v1
+
+      - name: Compare and inspect outputs
+        run: |
+          diff --recursive --brief --no-dereference \
+            /tmp/webclient-build-a /tmp/webclient-build-b
+          tar --sort=name --mtime='@1682509492' \
+            --owner=0 --group=0 --numeric-owner \
+            --file=/tmp/webclient-build-a.tar \
+            --create --directory=/tmp/webclient-build-a .
+          tar --sort=name --mtime='@1682509492' \
+            --owner=0 --group=0 --numeric-owner \
+            --file=/tmp/webclient-build-b.tar \
+            --create --directory=/tmp/webclient-build-b .
+          cmp /tmp/webclient-build-a.tar /tmp/webclient-build-b.tar
+          printf '%s  %s\n' \
+            dc012d2e7a91c43eb753aa982a8a78f1c02dd86ca9bcf9258091dc67bcaccb5f \
+            /tmp/webclient-build-a/main.dart.js \
+            | sha256sum --check --strict
+          cmp /tmp/webclient-build-a/main.dart.js resources/web/main.dart.js
+          cmp /tmp/webclient-build-a/js/dist/index.js resources/web/js/dist/index.js
+          cmp /tmp/webclient-build-a/js/dist/vendor.js resources/web/js/dist/vendor.js
+          test -f /tmp/webclient-build-a/corresponding-source/LICENCE
+          tar -tf /tmp/webclient-build-a/corresponding-source/rustdesk-source-47a7b7313bb906ebdae36bd16838bdefa8853639.tar \
+            | grep -qxF flutter/lib/main.dart
+          test -f /tmp/webclient-build-a/corresponding-source/integration/resources-web-js/src/ljw.js

@@ -1,0 +1,3 @@
+[submodule "webclient-v1"]
+	path = webclient-v1
+	url = https://github.com/AllenMGu/webclient-v1.git

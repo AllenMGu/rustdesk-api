@@ -129,6 +129,8 @@ displaying data.Frontend code is available at [rustdesk-api-web](https://github.
    pre-configured.
 3. After logging in, the ID server and key will be automatically synced.
 4. The address book will also be automatically saved to the web client for convenient use.
+5. Only the bundled V1 route is registered. The other numbered client route and its API/configuration have been removed.
+6. Complete corresponding source, the AGPL license, original copyright notices, and reproducible build instructions are maintained in the standalone [`AllenMGu/webclient-v1`](https://github.com/AllenMGu/webclient-v1) repository and pinned here as a Git submodule—not supplied merely as `main.dart.js`.
 
 ### Automated Documentation : API documentation is generated using Swag, making it easier for developers to understand and use the API.
 
@@ -196,8 +198,6 @@ The table below does not list all configurations. Please refer to the configurat
 | RUSTDESK_API_RUSTDESK_API_SERVER                       | Rustdesk API server address                                                                                                                         | http://192.168.1.66:21114     |
 | RUSTDESK_API_RUSTDESK_KEY                              | Rustdesk key                                                                                                                                        | 123456789                     |
 | RUSTDESK_API_RUSTDESK_KEY_FILE                         | Rustdesk key file                                                                                                                                   | `./conf/data/id_ed25519.pub`  |
-| RUSTDESK_API_RUSTDESK<br/>_WEBCLIENT_MAGIC_QUERYONLINE | New online query method is enabled in the web client v2; '1': Enabled, '0': Disabled, not enabled by default                                        | `0`                           |
-| RUSTDESK_API_RUSTDESK_WS_HOST                          | Custom Websocket Host                                                                                                                               | `wss://192.168.1.123:1234`    |
 | ---- PROXY -----                                       | ---------------                                                                                                                                     | ----------                    |
 | RUSTDESK_API_PROXY_ENABLE                              | proxy_enable :`false`, `true`                                                                                                                       | `false`                       |
 | RUSTDESK_API_PROXY_HOST                                | proxy_host                                                                                                                                          | `http://127.0.0.1:1080`       |
@@ -239,8 +239,9 @@ Download the release from [release](https://github.com/lejianwen/rustdesk-api/re
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/lejianwen/rustdesk-api.git
+   git clone --recurse-submodules https://github.com/AllenMGu/rustdesk-api.git
    cd rustdesk-api
+   git submodule update --init --recursive
    ```
 
 2. Install dependencies:
@@ -329,7 +330,7 @@ Download the release from [release](https://github.com/lejianwen/rustdesk-api/re
 - [WIKI](https://github.com/lejianwen/rustdesk-api/wiki)
 - [Connection Timeout](https://github.com/lejianwen/rustdesk-api/issues/92)
 - [Change client ID](https://github.com/abdullah-erturk/RustDesk-ID-Changer)
-- [Web client source](https://hub.docker.com/r/keyurbhole/flutter_web_desk)
+- [Web Client V1 standalone complete corresponding source and reproducible build](https://github.com/AllenMGu/webclient-v1)
 
 ## Acknowledgements
 

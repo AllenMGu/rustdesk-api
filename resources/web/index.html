@@ -87,10 +87,26 @@
             }
         }
     </style>
+    <style>
+        .agpl-source-link {
+            position: fixed;
+            right: 12px;
+            bottom: 10px;
+            z-index: 2147483647;
+            padding: 5px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.92);
+            color: #303133;
+            font: 12px/1.2 sans-serif;
+            text-decoration: none;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.24);
+        }
+    </style>
 
 </head>
 
 <body>
+<a class="agpl-source-link" href="SOURCE.html">Source · AGPL-3.0</a>
 <div class="loading">
     <div class="loader"></div>
 </div>
@@ -98,7 +114,7 @@
      application. For more information, see:
      https://developers.google.com/web/fundamentals/primers/service-workers -->
 <script>
-    var serviceWorkerVersion = '1200232272';
+    var serviceWorkerVersion = 'a266522e996a5ec5';
     var scriptLoaded = false;
 
     function loadMainDartJs() {

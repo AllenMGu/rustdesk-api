@@ -5,6 +5,7 @@
 [![Build](https://github.com/AllenMGu/rustdesk-api/actions/workflows/build.yml/badge.svg?branch=master)](https://github.com/AllenMGu/rustdesk-api/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/API-MIT-blue.svg)](LICENSE)
 [![RDGEN License](https://img.shields.io/badge/RDGEN-GPL--3.0-blue.svg)](rdgen/LICENSE)
+[![Web Client License](https://img.shields.io/badge/Web_Client-AGPL--3.0-blue.svg)](https://github.com/AllenMGu/webclient-v1/blob/main/LICENCE)
 
 这是一个面向自托管场景的 RustDesk 一体化仓库。`full-s6-generator`
 镜像在同一个 S6 容器中运行 RustDesk Server、RustDesk API、Web 管理后台和
@@ -51,9 +52,12 @@ flowchart TD
 - LDAP 认证失败时不会回退普通同名本地账户；可保留本地管理员作为应急入口。
 - GitHub、Google 和通用 OIDC 登录。
 - Web Client 自动获取 API、ID Server、Relay Server、公钥和地址簿。
-- 设备管理中的 `Web Client` 按钮使用内置 `/webclient/#/?id=...`；旧版
-  `/webclient2/#/<id>` 链接会由兼容页转换，不再返回 404。
+- 设备管理中的 `Web Client` 按钮使用内置 V1 路径
+  `/webclient/#/?id=...`。已删除另一套编号客户端路由、配置与 API。
 - 管理员临时分享 Web Client 连接。
+- Web Client 页面显著提供 AGPL 源码入口；发行包和容器同时包含
+  独立仓库 [`AllenMGu/webclient-v1`](https://github.com/AllenMGu/webclient-v1)
+  中的完整对应源码归档与可复现构建方式；API 通过 Git 子模块固定精确提交。
 - Swagger API 文档和服务器命令管理。
 - CLI 重置管理员密码。
 
@@ -151,7 +155,7 @@ ZIP_PASSWORD=一个独立的高强度随机值
 ### 3. 获取部署文件
 
 ```bash
-git clone https://github.com/AllenMGu/rustdesk-api.git \
+git clone --recurse-submodules https://github.com/AllenMGu/rustdesk-api.git \
   /opt/rustdesk-full-s6-generator
 
 cd /opt/rustdesk-full-s6-generator
@@ -711,6 +715,23 @@ docker build \
   -t rustdesk-api:full-s6-generator .
 ```
 
+Web Client V1 不是只提供 `main.dart.js`。完整对应源码单独发布在
+[`AllenMGu/webclient-v1`](https://github.com/AllenMGu/webclient-v1)，API 仓库通过
+`webclient-v1` Git 子模块固定精确提交。其完整 RustDesk 源码固定在
+[`JelleBuning/rustdesk@47a7b7313bb906ebdae36bd16838bdefa8853639`](https://github.com/JelleBuning/rustdesk/commit/47a7b7313bb906ebdae36bd16838bdefa8853639)，
+并保留 GNU AGPL v3 全文、原始版权声明和第三方通知。校验与构建：
+
+```bash
+./webclient-v1/verify-source.sh
+./webclient-v1/build.sh /tmp/rustdesk-webclient-v1
+```
+
+详细证据链、固定 Flutter 工具链和产物哈希见
+[`webclient-v1/PROVENANCE.md`](https://github.com/AllenMGu/webclient-v1/blob/main/PROVENANCE.md)。
+克隆已有 API 工作区后可运行 `git submodule update --init --recursive` 补齐源码。
+运行时可通过
+`/webclient/SOURCE.html` 或 `/webclient-source/` 获取。
+
 发布工作流会生成 amd64、arm64 和 armv7l 镜像并创建多架构 manifest。若只发布到 GHCR，可在手动运行 `Build` 工作流时设置：
 
 ```text
@@ -740,6 +761,7 @@ RDGEN 的开发与测试说明见 [rdgen/README.md](rdgen/README.md)，完整生
 |---|---|---|
 | RustDesk Server S6 | Full S6 容器、S6 服务编排与 Server/API 整合基础 | [源码：lejianwen/rustdesk-server `forapi`](https://github.com/lejianwen/rustdesk-server/tree/forapi)；[镜像：lejianwen/rustdesk-server-s6 `v0.1.2`](https://hub.docker.com/r/lejianwen/rustdesk-server-s6/tags) |
 | RustDesk API | Go API、Web Admin、Web Client 与管理功能 | [lejianwen/rustdesk-api](https://github.com/lejianwen/rustdesk-api) |
+| RustDesk Web Client V1 | 浏览器远程客户端，GNU AGPL v3 | [独立仓库、完整对应源码与提交](https://github.com/AllenMGu/webclient-v1) |
 | RDGEN | 自定义 RustDesk 客户端生成器 | [bryangerlach/rdgen](https://github.com/bryangerlach/rdgen) |
 | RustDesk | 远程桌面客户端与服务端上游 | [rustdesk/rustdesk](https://github.com/rustdesk/rustdesk) |
 | s6-overlay | 容器内服务初始化与监管 | [just-containers/s6-overlay](https://github.com/just-containers/s6-overlay) |
@@ -754,6 +776,10 @@ S6-overlay 方案及其 `lejianwen/rustdesk-server-s6` 镜像**。
 - 增加内部代理鉴权、输入校验、上传限制和 Artifact 访问控制。
 - 恢复并适配 Windows、Linux、Android 和 macOS 多平台构建。
 
-根目录 API 代码使用 [MIT License](LICENSE)。`rdgen/` 组件保留其 [GNU GPL v3](rdgen/LICENSE)。其他上游组件和生成产物分别适用各自许可证；使用、修改或再分发时请同时遵守相应许可与署名要求。
+根目录 API 代码使用 [MIT License](LICENSE)。`rdgen/` 组件保留其 [GNU GPL v3](rdgen/LICENSE)。
+`webclient-v1/` 子模块和 `resources/web/` 不适用根目录 MIT 许可，而按
+[GNU AGPL v3](https://github.com/AllenMGu/webclient-v1/blob/main/LICENCE) 提供；
+完整对应源码、原始版权声明和构建材料保存在独立仓库，并随发行物保留。
+其他上游组件和生成产物分别适用各自许可证。
 
 感谢以上项目的维护者和所有贡献者。

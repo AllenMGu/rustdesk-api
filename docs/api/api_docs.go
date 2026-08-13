@@ -1135,40 +1135,6 @@ const docTemplateapi = `{
                 }
             }
         },
-        "/server-config-v2": {
-            "get": {
-                "security": [
-                    {
-                        "token": []
-                    }
-                ],
-                "description": "服务配置,给webclient提供api-server",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "WEBCLIENT_V2"
-                ],
-                "summary": "服务配置",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.Response"
-                        }
-                    }
-                }
-            }
-        },
         "/shared-peer": {
             "post": {
                 "description": "分享的peer",

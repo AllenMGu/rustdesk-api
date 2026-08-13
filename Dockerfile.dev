@@ -48,12 +48,18 @@ ARG FRONTEND_GIT_BRANCH=master
 
 RUN git clone -b $FRONTEND_GIT_BRANCH $FRONTEND_GIT_REPO .
 
+COPY docker/full-s6-generator/web-overrides/patch-webclient.mjs /tmp/patch-webclient.mjs
+
 # Install required tools without caching index to minimize image size
 RUN if [ "$COUNTRY" = "CN" ] ; then \
         echo "It is in China, updating NPM_CONFIG_REGISTRY"; \
         export NPM_CONFIG_REGISTRY="https://mirrors.huaweicloud.com/repository/npm/"; \
-    fi && \
-    npm install && npm run build
+    fi \
+    && node /tmp/patch-webclient.mjs \
+      /frontend/src/utils/webclient.js \
+      /frontend/src/views/address_book/components/shareByWebClient.vue \
+    && npm install \
+    && npm run build
 
 
 # Stage 2: Final Image
@@ -76,6 +82,7 @@ COPY --from=builder-backend /app/release /app/
 COPY --from=builder-backend /app/conf /app/conf/
 COPY --from=builder-backend /app/resources /app/resources/
 COPY --from=builder-backend /app/docs /app/docs/
+COPY --from=builder-backend /app/webclient-v1 /app/webclient-v1/
 # Copy frontend build from builder2 stage
 COPY --from=builder-admin-frontend /frontend/dist/ /app/resources/admin/
 

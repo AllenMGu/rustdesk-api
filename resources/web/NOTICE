@@ -1,0 +1,21 @@
+RustDesk Web Client V1
+======================
+
+This component is free software licensed under the GNU Affero General Public
+License, version 3. The complete license text is in LICENCE.
+
+Upstream source:
+  https://github.com/JelleBuning/rustdesk
+  commit 47a7b7313bb906ebdae36bd16838bdefa8853639
+
+The complete corresponding source, original copyright notices, third-party
+notices, dependency lock files, and reproducible build instructions accompany
+the binary. Do not remove them when redistributing this component.
+
+Preserved upstream declarations include Copyright © 2022 Purslane, Inc.,
+Copyright © 2022 Purslane Ltd., Copyright © 2022 ZJUPI, and the RustDesk
+authors and contributors. Their original context remains in Cargo.toml,
+src/ui/index.tis, and the complete source tree.
+
+The root MIT license of rustdesk-api does not replace or narrow the AGPL terms
+applicable to this Web Client and modifications derived from it.

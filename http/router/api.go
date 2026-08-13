@@ -142,7 +142,6 @@ func WebClientRoutes(frg *gin.RouterGroup) {
 	}
 	{
 		frg.POST("/server-config", middleware.RustAuth(), w.ServerConfig)
-		frg.POST("/server-config-v2", middleware.RustAuth(), w.ServerConfigV2)
 	}
 
 }

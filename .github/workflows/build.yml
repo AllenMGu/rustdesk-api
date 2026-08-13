@@ -57,6 +57,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
       - uses: actions/checkout@v4
         with:
           repository: lejianwen/rustdesk-api-web
@@ -74,7 +75,10 @@ jobs:
           node-version: '20'
 
       - name: Point admin Web Client links at the bundled client
-        run: node docker/full-s6-generator/web-overrides/patch-webclient.mjs rustdesk-api-web/src/utils/webclient.js
+        run: |
+          node docker/full-s6-generator/web-overrides/patch-webclient.mjs \
+            rustdesk-api-web/src/utils/webclient.js \
+            rustdesk-api-web/src/views/address_book/components/shareByWebClient.vue
 
       - name: build rustdesk-api-web
         working-directory: rustdesk-api-web
@@ -117,6 +121,9 @@ jobs:
         run: |
           mkdir release -p
           cp -ar resources release/
+          mkdir -p release/webclient-v1
+          tar --exclude=.git -C webclient-v1 -cf - . \
+            | tar -C release/webclient-v1 -xf -
           cp -ar docs release/
           cp -ar conf release/
           mkdir -p release/data
@@ -182,6 +189,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -232,6 +241,9 @@ jobs:
           chmod -v a+x debian-build/${{ matrix.job.platform }}/bin/*
           mkdir -p data
           cp -vr debian systemd conf data resources runtime debian-build/${{ matrix.job.platform }}/
+          mkdir -p debian-build/${{ matrix.job.platform }}/webclient-v1
+          tar --exclude=.git -C webclient-v1 -cf - . \
+            | tar -C debian-build/${{ matrix.job.platform }}/webclient-v1 -xf -
           cat debian/control.tpl | sed 's/{{ ARCH }}/${{ matrix.job.debian_platform }}/' > debian-build/${{ matrix.job.platform }}/debian/control
           cd debian-build/${{ matrix.job.platform }}/
           debuild -i -us -uc -b -a${{ matrix.job.debian_platform}}
@@ -264,6 +276,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Normalize container image namespaces
         shell: bash
