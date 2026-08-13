@@ -225,6 +225,32 @@ window.setByName = (name, value) => {
             delete peers[value];
             localStorage.setItem('peers', JSON.stringify(peers));
             break;
+        case 'peer_favorite': {
+            const update = JSON.parse(value);
+            const favorites = getFavoritePeerIds();
+            if (update.favorite) {
+                favorites.add(update.id);
+            } else {
+                favorites.delete(update.id);
+            }
+            localStorage.setItem('favorite-peers', JSON.stringify(Array.from(favorites)));
+            break;
+        }
+        case 'clear_recent': {
+            const ids = JSON.parse(value);
+            const recentPeers = getPeers();
+            ids.forEach(id => {
+                const peer = recentPeers[id];
+                if (!peer) return;
+                if (peer.address_book || peer.managed) {
+                    delete peer.last_connected;
+                } else {
+                    delete recentPeers[id];
+                }
+            });
+            localStorage.setItem('peers', JSON.stringify(recentPeers));
+            break;
+        }
         case 'input_key':
             value = JSON.parse(value);
             curConn.inputKey(value.name, value.down == 'true', value.press == 'true', value.alt == 'true', value.ctrl == 'true', value.shift == 'true', value.command == 'true');
@@ -297,10 +323,52 @@ function getPeersForDart() {
     return peers.sort().reverse().map(x => x.slice(1));
 }
 
+function getFavoritePeerIds() {
+    try {
+        return new Set(JSON.parse(localStorage.getItem('favorite-peers')) || []);
+    } catch (e) {
+        return new Set();
+    }
+}
+
+function getPeerCatalogForDart() {
+    const favorites = getFavoritePeerIds();
+    const peers = [];
+    for (const [id, value] of Object.entries(getPeers())) {
+        if (!id || !value || !value.info) continue;
+        const info = value.info;
+        const knownSource = Boolean(value.address_book || value.managed);
+        const lastConnected = value.last_connected || (!knownSource ? value.tm || 0 : 0);
+        peers.push({
+            id,
+            username: info.username || '',
+            hostname: info.hostname || '',
+            platform: info.platform || '',
+            alias: info.alias || '',
+            tags: Array.isArray(info.tags) ? info.tags : [],
+            online: Boolean(info.online),
+            last_online_time: Number(info.last_online_time || 0),
+            last_connected: Number(lastConnected),
+            favorite: favorites.has(id),
+            address_book: Boolean(value.address_book),
+            managed: Boolean(value.managed),
+        });
+    }
+    return peers.sort((left, right) => {
+        const recentOrder = right.last_connected - left.last_connected;
+        if (recentOrder !== 0) return recentOrder;
+        const leftName = left.alias || left.hostname || left.id;
+        const rightName = right.alias || right.hostname || right.id;
+        return leftName.localeCompare(rightName);
+    });
+}
+
 function _getByName(name, arg) {
     switch (name) {
         case 'peers':
             return getPeersForDart();
+        case 'peer_catalog':
+            return getPeerCatalogForDart();
         case 'remote_id':
             return localStorage.getItem('remote-id');
         case 'remember':

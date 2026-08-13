@@ -78,7 +78,22 @@ export function getServerConf(token){
                         oldPeers[k] = res.data.peers[k]
                         needUpdate = true
                     } else {
+                        const before = JSON.stringify({
+                            info: oldPeers[k].info,
+                            address_book: oldPeers[k].address_book,
+                            managed: oldPeers[k].managed,
+                        })
                         oldPeers[k].info = res.data.peers[k].info
+                        oldPeers[k].address_book = Boolean(res.data.peers[k].address_book)
+                        oldPeers[k].managed = Boolean(res.data.peers[k].managed)
+                        const after = JSON.stringify({
+                            info: oldPeers[k].info,
+                            address_book: oldPeers[k].address_book,
+                            managed: oldPeers[k].managed,
+                        })
+                        if (before !== after) {
+                            needUpdate = true
+                        }
                     }
                     if (oldPeers[k].info && oldPeers[k].info.hash && !oldPeers[k].password) {
                         let p1 = window.atob(oldPeers[k].info.hash)

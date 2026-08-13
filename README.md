@@ -56,6 +56,8 @@ flowchart TD
   `/webclient/#/?id=...`。已删除另一套编号客户端路由、配置与 API。
 - Web Client V1 采用参考 RustDesk 1.4.9 客户端的响应式新界面，同时保留现有
   V1 连接协议、API 自动登录、服务器配置、分享链接和地址簿兼容性。
+- Web Client V1 提供参考 Web Client V2 的最近连接、收藏、地址簿、账号设备、
+  搜索、批量选择和网格/列表视图；地址簿别名/标签及设备在线状态由 API 自动同步。
 - 管理员临时分享 Web Client 连接。
 - Web Client 页面显著提供 AGPL 源码入口；发行包和容器同时包含
   独立仓库 [`AllenMGu/webclient-v1`](https://github.com/AllenMGu/webclient-v1)
@@ -726,7 +728,11 @@ Web Client V1 不是只提供 `main.dart.js`。完整对应源码单独发布在
 当前界面修改以完整 Dart 源码保存在子模块的 `overrides/flutter/`，构建时覆盖固定
 V1 源码快照。它只更新顶栏、连接卡片、最近会话和菜单视觉，不声称是 RustDesk
 1.4.9 预览 Web 核心的构建。更新后 `main.dart.js` SHA-256 为
-`d92ca6461822b1d0013c4af9024e994f56914e2b8303b6555a5f9041138e971c`。
+`82dcac8f2d4c36327c9d56a0fef492f4e4db92d1960277318014e5b7f06fda85`。
+
+分类导航参考 Web Client V2，但浏览器不具备桌面客户端 UDP 局域网发现能力。因此
+“设备”分类显示当前登录账号在 API 中已登记的设备及心跳在线状态，而不是不可靠的
+浏览器局域网扫描。收藏和视图偏好保存在当前浏览器本地。
 
 ```bash
 ./webclient-v1/verify-source.sh

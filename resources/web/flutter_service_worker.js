@@ -31,10 +31,10 @@ const RESOURCES = {
   "icons/Icon-512.png": "363d0fbd6c49a37ee01b9afad0849d86",
   "icons/Icon-maskable-192.png": "5496a0a956a65451bb26d515a8365838",
   "icons/Icon-maskable-512.png": "7f03ce96eb8a827eb1a8dd06a5ebc638",
-  "index.html": "75640f3308e87fcd8e044a8e1c6c4085",
+  "index.html": "04073c04d7d82076c996fce06ff6a5ef",
   "js/dist/index.css": "325598511be4c5926c2e5bd308a3ea4c",
   "js/dist/index.html": "85716a9a0538b47b808045f6923bc8d8",
-  "js/dist/index.js": "d6088775247ee89ec8ae669e9d837f5e",
+  "js/dist/index.js": "0e9753b63e96ff63087ca3cbbb8af346",
   "js/dist/vendor.js": "158a0d2d986f84d64c5e9a2171201bb6",
   "js/gen_js_from_hbb.py": "b6e1ca5f641d115bef1cad62ea610cba",
   "js/index.html": "2e82f245c8a1b4a297893becc211e8ba",
@@ -42,10 +42,10 @@ const RESOURCES = {
   "js/package.json": "397649f693f9e2f3052c1ce2c5fb925f",
   "js/src/codec.js": "9e5faf3ec7cf3a33f1bedfb798ea0aa7",
   "js/src/common.ts": "5b4db4beb519ea747aa575116dd09f32",
-  "js/src/connection.ts": "493df56542f49a6cfa509e6be5e8708c",
+  "js/src/connection.ts": "5a895157e1260a106c6d4306236424e6",
   "js/src/gen_js_from_hbb.ts": "ffa7bd435d554799387002e6d8488529",
-  "js/src/globals.js": "3e45933b69b5659b1ca6380c5b9190e2",
-  "js/src/ljw.js": "508fc288b8b5974c3dfd4f980e4453e8",
+  "js/src/globals.js": "141947c6e83e29843ccb280ae5cd4616",
+  "js/src/ljw.js": "5370a93c35fa65ff6cc3950756f8c437",
   "js/src/main.ts": "b0f2bfbc183c87e47c5ed802a54fbfa6",
   "js/src/message.ts": "6afb0acdea65ab6a3933e4fac741bc14",
   "js/src/rendezvous.ts": "de71b8f1caff41ce241e4955fb8bfbbc",
@@ -61,7 +61,7 @@ const RESOURCES = {
   "libopus.wasm": "b8801d4a953d58e739fd9d25134467d3",
   "libs/firebase-analytics.js": "c6fcb4296681957bc1dd5fcd8e7eee50",
   "libs/firebase-app.js": "f61459b893c6422d6e8e96e8aa5fbdcd",
-  "main.dart.js": "09cc6a315cbc52be77565ae727d2086f",
+  "main.dart.js": "b036a40f4ef560038fc71de60d3b0242",
   "manifest.json": "18e53390c166023eb5b32e95b324ec2b",
   "ogvjs-1.8.6/COPYING": "d35e32d19d3d58a88cd0bc98e94a9073",
   "ogvjs-1.8.6/COPYING-dav1d.txt": "c8055cfe7548dfdaa3a6dc45d8793669",
@@ -121,7 +121,7 @@ const RESOURCES = {
   "yuv-canvas-1.2.6.js": "c4ace642c725cf918ed9440426b583b8",
   "yuv.js": "5cff03855bc9577b6104b9743ff26790",
   "yuv.wasm": "443e8cb7b56fff2550ce0a411f3a05eb",
-  "/": "75640f3308e87fcd8e044a8e1c6c4085"
+  "/": "04073c04d7d82076c996fce06ff6a5ef"
 };
 
 // The application shell files that are downloaded before a service worker can

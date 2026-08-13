@@ -124,7 +124,7 @@ jobs:
             --create --directory=/tmp/webclient-build-b .
           cmp /tmp/webclient-build-a.tar /tmp/webclient-build-b.tar
           printf '%s  %s\n' \
-            d92ca6461822b1d0013c4af9024e994f56914e2b8303b6555a5f9041138e971c \
+            82dcac8f2d4c36327c9d56a0fef492f4e4db92d1960277318014e5b7f06fda85 \
             /tmp/webclient-build-a/main.dart.js \
             | sha256sum --check --strict
           cmp /tmp/webclient-build-a/main.dart.js resources/web/main.dart.js

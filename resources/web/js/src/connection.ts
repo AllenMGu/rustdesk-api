@@ -473,9 +473,18 @@ export default class Connection {
     globals.pushEvent("peer_info", pi);
     const p = this.shouldAutoLogin();
     if (p) this.inputOsPassword(p);
-    const username = this.getOption("info")?.username;
+    const previousInfo = this.getOption("info");
+    const username = previousInfo?.username;
     if (username && !pi.username) pi.username = username;
-    this.setOption("info", pi);
+    this._options["last_connected"] = new Date().getTime();
+    this.setOption("info", {
+      ...previousInfo,
+      ...pi,
+      alias: previousInfo?.alias || "",
+      tags: previousInfo?.tags || [],
+      online: previousInfo?.online || false,
+      last_online_time: previousInfo?.last_online_time || 0,
+    });
     if (this.getRemember()) {
       if (this._password?.length) {
         const p = this._password.toString();
