@@ -26,11 +26,36 @@ func (i *WebClient) ServerConfig(c *gin.Context) {
 	u := service.AllService.UserService.CurUser(c)
 
 	peers := map[string]*api.WebClientPeerPayload{}
-	abs := service.AllService.AddressBookService.ListByUserIdAndCollectionId(u.Id, 0, 1, 100)
+	abs := service.AllService.AddressBookService.ListByUserIdAndCollectionId(u.Id, 0, 1, 1000)
 	for _, ab := range abs.AddressBooks {
 		pp := &api.WebClientPeerPayload{}
 		pp.FromAddressBook(ab)
 		peers[ab.Id] = pp
+	}
+	devices := service.AllService.PeerService.ListByUserIds([]uint{u.Id}, 1, 1000)
+	for _, device := range devices.Peers {
+		if existing, ok := peers[device.Id]; ok {
+			existing.Managed = true
+			existing.Info.Online = device.LastOnlineTime > time.Now().Add(-90*time.Second).Unix()
+			existing.Info.LastOnlineTime = device.LastOnlineTime
+			if existing.Info.Alias == "" {
+				existing.Info.Alias = device.Alias
+			}
+			if existing.Info.Username == "" {
+				existing.Info.Username = device.Username
+			}
+			if existing.Info.Hostname == "" {
+				existing.Info.Hostname = device.Hostname
+			}
+			if existing.Info.Platform == "" {
+				existing.Info.Platform = service.AllService.AddressBookService.PlatformFromOs(device.Os)
+			}
+			continue
+		}
+		pp := &api.WebClientPeerPayload{}
+		pp.FromPeer(device)
+		pp.Info.Platform = service.AllService.AddressBookService.PlatformFromOs(device.Os)
+		peers[device.Id] = pp
 	}
 	response.Success(
 		c,
