@@ -205,6 +205,9 @@ window.setByName = (name, value) => {
         case 'reconnect':
             curConn.reconnect();
             break;
+        case 'reload':
+            window.location.reload();
+            break;
         case 'toggle_option':
             curConn.toggleOption(value);
             break;
@@ -249,6 +252,30 @@ window.setByName = (name, value) => {
                 }
             });
             localStorage.setItem('peers', JSON.stringify(recentPeers));
+            break;
+        }
+        case 'address_book_activate': {
+            const update = JSON.parse(value);
+            const peers = getPeers();
+            const peer = peers[update.id];
+            const detail = peer?.address_book_details?.[update.guid];
+            if (!peer || !detail) break;
+            peer.info = {...peer.info, ...detail};
+            if (detail.hash) {
+                try {
+                    const decoded = window.atob(detail.hash);
+                    peer.password = Uint8Array.from(decoded, c => c.charCodeAt(0)).toString();
+                    peer.remember = true;
+                    peer.address_book_password = true;
+                } catch (e) {
+                    console.error('Invalid address book password hash', e);
+                }
+            } else if (peer.address_book_password) {
+                delete peer.password;
+                delete peer.address_book_password;
+            }
+            peers[update.id] = peer;
+            localStorage.setItem('peers', JSON.stringify(peers));
             break;
         }
         case 'input_key':
@@ -351,6 +378,8 @@ function getPeerCatalogForDart() {
             last_connected: Number(lastConnected),
             favorite: favorites.has(id),
             address_book: Boolean(value.address_book),
+            address_books: Array.isArray(value.address_books) ? value.address_books : [],
+            address_book_details: value.address_book_details || {},
             managed: Boolean(value.managed),
         });
     }
@@ -369,6 +398,12 @@ function _getByName(name, arg) {
             return getPeersForDart();
         case 'peer_catalog':
             return getPeerCatalogForDart();
+        case 'address_book_catalog':
+            try {
+                return JSON.parse(localStorage.getItem('webclient-address-books')) || [];
+            } catch (e) {
+                return [];
+            }
         case 'remote_id':
             return localStorage.getItem('remote-id');
         case 'remember':

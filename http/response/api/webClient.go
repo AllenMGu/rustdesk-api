@@ -2,17 +2,28 @@ package api
 
 import (
 	"encoding/json"
-	"github.com/lejianwen/rustdesk-api/v2/model"
 	"time"
+
+	"github.com/lejianwen/rustdesk-api/v2/model"
 )
 
 type WebClientPeerPayload struct {
-	ViewStyle   string                   `json:"view-style"`
-	Tm          int64                    `json:"tm"`
-	Info        WebClientPeerInfoPayload `json:"info"`
-	Tmppwd      string                   `json:"tmppwd"`
-	AddressBook bool                     `json:"address_book"`
-	Managed     bool                     `json:"managed"`
+	ViewStyle         string                              `json:"view-style"`
+	Tm                int64                               `json:"tm"`
+	Info              WebClientPeerInfoPayload            `json:"info"`
+	Tmppwd            string                              `json:"tmppwd"`
+	AddressBook       bool                                `json:"address_book"`
+	AddressBooks      []string                            `json:"address_books"`
+	AddressBookDetails map[string]WebClientPeerInfoPayload `json:"address_book_details"`
+	Managed           bool                                `json:"managed"`
+}
+
+type WebClientAddressBookPayload struct {
+	Guid  string   `json:"guid"`
+	Name  string   `json:"name"`
+	Owner string   `json:"owner"`
+	Rule  int      `json:"rule"`
+	Tags  []string `json:"tags"`
 }
 
 type WebClientPeerInfoPayload struct {
@@ -32,18 +43,71 @@ func (wcpp *WebClientPeerPayload) FromAddressBook(a *model.AddressBook) {
 	wcpp.AddressBook = true
 	//24小时前
 	wcpp.Tm = time.Now().Add(-time.Hour * 24).UnixNano()
-	tags := make([]string, 0)
-	_ = json.Unmarshal([]byte(a.Tags), &tags)
-	wcpp.Info = WebClientPeerInfoPayload{
+	wcpp.Info = WebClientPeerInfoFromAddressBook(a)
+}
+
+func WebClientPeerInfoFromAddressBook(a *model.AddressBook) WebClientPeerInfoPayload {
+	return WebClientPeerInfoPayload{
 		Username: a.Username,
 		Hostname: a.Hostname,
 		Platform: a.Platform,
 		Hash:     a.Hash,
 		Id:       a.Id,
 		Alias:    a.Alias,
-		Tags:     tags,
+		Tags:     WebClientAddressBookTags(a),
 		Online:   a.Online,
 	}
+}
+
+func WebClientAddressBookTags(a *model.AddressBook) []string {
+	tags := make([]string, 0)
+	_ = json.Unmarshal([]byte(a.Tags), &tags)
+	return tags
+}
+
+func (wcpp *WebClientPeerPayload) AddAddressBook(guid string) {
+	wcpp.AddressBook = true
+	for _, existing := range wcpp.AddressBooks {
+		if existing == guid {
+			return
+		}
+	}
+	wcpp.AddressBooks = append(wcpp.AddressBooks, guid)
+}
+
+func (wcpp *WebClientPeerPayload) MergeAddressBook(a *model.AddressBook, guid string) {
+	wcpp.AddAddressBook(guid)
+	if wcpp.AddressBookDetails == nil {
+		wcpp.AddressBookDetails = make(map[string]WebClientPeerInfoPayload)
+	}
+	wcpp.AddressBookDetails[guid] = WebClientPeerInfoFromAddressBook(a)
+	tags := WebClientAddressBookTags(a)
+	seen := make(map[string]bool, len(wcpp.Info.Tags))
+	for _, tag := range wcpp.Info.Tags {
+		seen[tag] = true
+	}
+	for _, tag := range tags {
+		if tag != "" && !seen[tag] {
+			wcpp.Info.Tags = append(wcpp.Info.Tags, tag)
+			seen[tag] = true
+		}
+	}
+	if wcpp.Info.Username == "" {
+		wcpp.Info.Username = a.Username
+	}
+	if wcpp.Info.Hostname == "" {
+		wcpp.Info.Hostname = a.Hostname
+	}
+	if wcpp.Info.Platform == "" {
+		wcpp.Info.Platform = a.Platform
+	}
+	if wcpp.Info.Hash == "" {
+		wcpp.Info.Hash = a.Hash
+	}
+	if wcpp.Info.Alias == "" {
+		wcpp.Info.Alias = a.Alias
+	}
+	wcpp.Info.Online = wcpp.Info.Online || a.Online
 }
 
 func (wcpp *WebClientPeerPayload) FromPeer(p *model.Peer) {
