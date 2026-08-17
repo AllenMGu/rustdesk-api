@@ -1,6 +1,9 @@
 name: Custom macOS Client Generator
 run-name: Custom macOS Client Generator
 on: 
+  push:
+    branches:
+      - fix/issue-27-macos-dmg
   workflow_dispatch:
     inputs:
       version:
@@ -50,7 +53,7 @@ env:
   # vcpkg version: 2024.07.12
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
   ARMV7_VCPKG_COMMIT_ID: "6f29f12e82a8293156836ad81cc9bf5af41fe836"
-  VERSION: "${{ inputs.version }}"
+  VERSION: "${{ inputs.version || '1.4.9' }}"
   NDK_VERSION: "r28c"
   #signing keys env variable checks
   ANDROID_SIGNING_KEY: "${{ secrets.ANDROID_SIGNING_KEY }}"
@@ -62,14 +65,14 @@ jobs:
   setup:
     uses: ./.github/workflows/fetch-encrypted-secrets.yml
     with:
-      input_blob_sha: ${{ inputs.input_blob_sha }}
+      input_blob_sha: ${{ inputs.input_blob_sha || '973c1a38158492158819e5709e2af04da6c712d0' }}
 
   generate-bridge:
     uses: ./.github/workflows/bridge.yml
     with:
-      version: ${{ inputs.version }}
-      source_repository: ${{ inputs.source_repository }}
-      source_ref: ${{ inputs.source_ref }}
+      version: ${{ inputs.version || '1.4.9' }}
+      source_repository: ${{ inputs.source_repository || 'AllenMGu/rustdesk' }}
+      source_ref: ${{ inputs.source_ref || 'master' }}
 
   build-for-macos:
     name: ${{ matrix.job.target }}
@@ -110,7 +113,7 @@ jobs:
       - name: Verify build identity
         shell: bash
         run: |
-          if [[ "${{ env.uuid }}" != "${{ inputs.build_uuid }}" ]]; then
+          if [[ "${{ env.uuid }}" != "${{ inputs.build_uuid || '2e3b5a53-4478-4ec8-bf29-505acb2e88eb' }}" ]]; then
             echo "Encrypted build UUID does not match workflow input" >&2
             exit 1
           fi
@@ -125,8 +128,8 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
         with:
-            repository: ${{ inputs.source_repository }}
-            ref: ${{ inputs.source_ref }}
+            repository: ${{ inputs.source_repository || 'AllenMGu/rustdesk' }}
+            ref: ${{ inputs.source_ref || 'master' }}
             submodules: recursive
 
       - name: Checkout generator patches
@@ -687,7 +690,7 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rdgen-${{ inputs.build_uuid }}-macos-${{ matrix.job.arch }}
+          name: rdgen-${{ inputs.build_uuid || '2e3b5a53-4478-4ec8-bf29-505acb2e88eb' }}-macos-${{ matrix.job.arch }}
           path: ${{ github.workspace }}/${{ env.filename }}-${{ matrix.job.arch }}.dmg
           if-no-files-found: error
           retention-days: 7
@@ -704,7 +707,7 @@ jobs:
         run: |
           gh api --paginate \
             "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
-            --jq ".artifacts[] | select(.name | startswith(\"rdgen-${{ inputs.build_uuid }}-\") | not) | .id" |
+            --jq ".artifacts[] | select(.name | startswith(\"rdgen-${{ inputs.build_uuid || '2e3b5a53-4478-4ec8-bf29-505acb2e88eb' }}-\") | not) | .id" |
             while read -r artifact_id; do
               gh api --method DELETE \
                 "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
