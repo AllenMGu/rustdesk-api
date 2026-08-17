@@ -505,6 +505,24 @@ jobs:
           sed -i -e "s/RustDesk.app/\"${{ env.appname }}.app\"/" build.py
           ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
 
+      - name: Normalize macOS app bundle name
+        shell: bash
+        run: |
+          RELEASE_DIR="$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release"
+          CUSTOM_APP="$RELEASE_DIR/${{ env.appname }}.app"
+          DEFAULT_APP="$RELEASE_DIR/RustDesk.app"
+
+          if [ -d "$CUSTOM_APP/Contents" ]; then
+            echo "Using generated app bundle: $CUSTOM_APP"
+          elif [ -d "$DEFAULT_APP/Contents" ]; then
+            mv "$DEFAULT_APP" "$CUSTOM_APP"
+            echo "Renamed RustDesk.app to ${{ env.appname }}.app"
+          else
+            echo "Could not find a valid macOS app bundle in $RELEASE_DIR" >&2
+            ls -la "$RELEASE_DIR" || true
+            exit 1
+          fi
+
       # - name: Copy service file
       #   run: |
       #     cp -rf ../target/release/service ./build/macos/Build/Products/Release/RustDesk.app/Contents/MacOS/
@@ -578,13 +596,6 @@ jobs:
             echo "Current directory contents:"
             ls -la
             
-            # Rename RustDesk.app to the custom app name first
-            if [ -d "RustDesk.app" ]; then
-              # First rename the app if it's still called RustDesk.app
-              mv "RustDesk.app" "${{ env.appname }}.app"
-              echo "Renamed RustDesk.app to ${{ env.appname }}.app"
-            fi
-            
             echo "App bundle contents after rename:"
             ls -la "${{ env.appname }}.app" || echo "App not found"
             ls -la "${{ env.appname }}.app/Contents" || echo "Contents not found"
@@ -634,11 +645,6 @@ jobs:
           # Print directory contents for debugging
           echo "Directory contents:"
           ls -la
-          # Find the actual .app bundle
-          if [ -d "RustDesk.app" ]; then
-            # First rename the app if it's still called RustDesk.app
-            mv "RustDesk.app" "${{ env.appname }}.app"
-          fi
           if [ ! -d "${{ env.appname }}.app" ]; then
             echo "Could not find .app bundle!"
             exit 1
