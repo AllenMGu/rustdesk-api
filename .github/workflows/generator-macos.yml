@@ -548,7 +548,7 @@ jobs:
         continue-on-error: false
         shell: bash
         run: |
-          ASSETS_DIR="build/macos/Build/Products/Release/RustDesk.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
+          ASSETS_DIR="build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
           mkdir -p "$ASSETS_DIR"
           if [ -f "$ASSETS_DIR/icon.svg" ]; then
             mv "$ASSETS_DIR/icon.svg" "$ASSETS_DIR/icon.svg.bak"
@@ -564,7 +564,7 @@ jobs:
         continue-on-error: false
         shell: bash
         run: |
-          ASSETS_DIR="build/macos/Build/Products/Release/RustDesk.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
+          ASSETS_DIR="build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
           mkdir -p "$ASSETS_DIR"
           curl -k -L --tlsv1.2 --proto =https --ssl-reqd \
             -H "User-Agent: Mozilla/5.0" \
@@ -648,6 +648,9 @@ jobs:
             exit 1
           fi
           echo "Creating DMG for ${{ env.appname }}.app"
+          DMG_STAGING_DIR="$(mktemp -d)"
+          trap 'rm -rf "$DMG_STAGING_DIR"' EXIT
+          cp -R "${{ env.appname }}.app" "$DMG_STAGING_DIR/"
           create-dmg \
             --volname "${{ env.appname }}" \
             --window-pos 200 120 \
@@ -657,8 +660,8 @@ jobs:
             --hide-extension "${{ env.appname }}.app" \
             --app-drop-link 600 185 \
             "${{ env.appname }}-${{ matrix.job.arch }}.dmg" \
-            "${{ env.appname }}.app"
-          mv "${{ env.appname }}-${{ matrix.job.arch }}.dmg" $GITHUB_WORKSPACE/
+            "$DMG_STAGING_DIR"
+          mv "${{ env.appname }}-${{ matrix.job.arch }}.dmg" "$GITHUB_WORKSPACE/"
   
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
