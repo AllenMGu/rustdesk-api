@@ -493,10 +493,6 @@ jobs:
           fi
           head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
 
-      - name: Create MacOS directory structure
-        run: |
-          mkdir -p ./build/macos/Build/Products/Release/RustDesk.app/Contents/MacOS
-
       - name: Build rustdesk
         run: |
           if [ "${{ matrix.job.target }}" = "aarch64-apple-darwin" ]; then
@@ -508,6 +504,24 @@ jobs:
           fi
           sed -i -e "s/RustDesk.app/\"${{ env.appname }}.app\"/" build.py
           ./build.py --flutter --hwcodec --unix-file-copy-paste ${{ matrix.job.extra-build-args }}
+
+      - name: Normalize macOS app bundle name
+        shell: bash
+        run: |
+          RELEASE_DIR="$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release"
+          CUSTOM_APP="$RELEASE_DIR/${{ env.appname }}.app"
+          DEFAULT_APP="$RELEASE_DIR/RustDesk.app"
+
+          if [ -d "$CUSTOM_APP/Contents" ]; then
+            echo "Using generated app bundle: $CUSTOM_APP"
+          elif [ -d "$DEFAULT_APP/Contents" ]; then
+            mv "$DEFAULT_APP" "$CUSTOM_APP"
+            echo "Renamed RustDesk.app to ${{ env.appname }}.app"
+          else
+            echo "Could not find a valid macOS app bundle in $RELEASE_DIR" >&2
+            ls -la "$RELEASE_DIR" || true
+            exit 1
+          fi
 
       # - name: Copy service file
       #   run: |
@@ -548,7 +562,7 @@ jobs:
         continue-on-error: false
         shell: bash
         run: |
-          ASSETS_DIR="build/macos/Build/Products/Release/RustDesk.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
+          ASSETS_DIR="$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
           mkdir -p "$ASSETS_DIR"
           if [ -f "$ASSETS_DIR/icon.svg" ]; then
             mv "$ASSETS_DIR/icon.svg" "$ASSETS_DIR/icon.svg.bak"
@@ -564,7 +578,7 @@ jobs:
         continue-on-error: false
         shell: bash
         run: |
-          ASSETS_DIR="build/macos/Build/Products/Release/RustDesk.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
+          ASSETS_DIR="$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
           mkdir -p "$ASSETS_DIR"
           curl -k -L --tlsv1.2 --proto =https --ssl-reqd \
             -H "User-Agent: Mozilla/5.0" \
@@ -581,13 +595,6 @@ jobs:
             # Debug info
             echo "Current directory contents:"
             ls -la
-            
-            # Rename RustDesk.app to the custom app name first
-            if [ -d "RustDesk.app" ]; then
-              # First rename the app if it's still called RustDesk.app
-              mv "RustDesk.app" "${{ env.appname }}.app"
-              echo "Renamed RustDesk.app to ${{ env.appname }}.app"
-            fi
             
             echo "App bundle contents after rename:"
             ls -la "${{ env.appname }}.app" || echo "App not found"
@@ -634,20 +641,18 @@ jobs:
 
       - name: Create DMG
         run: |
-          cd /Users/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/flutter/build/macos/Build/Products/Release
+          cd "$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release"
           # Print directory contents for debugging
           echo "Directory contents:"
           ls -la
-          # Find the actual .app bundle
-          if [ -d "RustDesk.app" ]; then
-            # First rename the app if it's still called RustDesk.app
-            mv "RustDesk.app" "${{ env.appname }}.app"
-          fi
           if [ ! -d "${{ env.appname }}.app" ]; then
             echo "Could not find .app bundle!"
             exit 1
           fi
           echo "Creating DMG for ${{ env.appname }}.app"
+          DMG_STAGING_DIR="$(mktemp -d)"
+          trap 'rm -rf "$DMG_STAGING_DIR"' EXIT
+          /usr/bin/ditto "${{ env.appname }}.app" "$DMG_STAGING_DIR/${{ env.appname }}.app"
           create-dmg \
             --volname "${{ env.appname }}" \
             --window-pos 200 120 \
@@ -657,8 +662,8 @@ jobs:
             --hide-extension "${{ env.appname }}.app" \
             --app-drop-link 600 185 \
             "${{ env.appname }}-${{ matrix.job.arch }}.dmg" \
-            "${{ env.appname }}.app"
-          mv "${{ env.appname }}-${{ matrix.job.arch }}.dmg" $GITHUB_WORKSPACE/
+            "$DMG_STAGING_DIR"
+          mv "${{ env.appname }}-${{ matrix.job.arch }}.dmg" "$GITHUB_WORKSPACE/"
   
       - name: Rename rustdesk
         if: env.UPLOAD_ARTIFACT == 'true'
