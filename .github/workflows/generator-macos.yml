@@ -493,10 +493,6 @@ jobs:
           fi
           head -n 100 "${VCPKG_ROOT}/buildtrees/ffmpeg/build-${{ matrix.job.vcpkg-triplet }}-rel-out.log" || true
 
-      - name: Create MacOS directory structure
-        run: |
-          mkdir -p ./build/macos/Build/Products/Release/RustDesk.app/Contents/MacOS
-
       - name: Build rustdesk
         run: |
           if [ "${{ matrix.job.target }}" = "aarch64-apple-darwin" ]; then
@@ -548,7 +544,7 @@ jobs:
         continue-on-error: false
         shell: bash
         run: |
-          ASSETS_DIR="build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
+          ASSETS_DIR="$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
           mkdir -p "$ASSETS_DIR"
           if [ -f "$ASSETS_DIR/icon.svg" ]; then
             mv "$ASSETS_DIR/icon.svg" "$ASSETS_DIR/icon.svg.bak"
@@ -564,7 +560,7 @@ jobs:
         continue-on-error: false
         shell: bash
         run: |
-          ASSETS_DIR="build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
+          ASSETS_DIR="$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release/${{ env.appname }}.app/Contents/Frameworks/App.framework/Versions/Current/Resources/flutter_assets/assets"
           mkdir -p "$ASSETS_DIR"
           curl -k -L --tlsv1.2 --proto =https --ssl-reqd \
             -H "User-Agent: Mozilla/5.0" \
@@ -634,7 +630,7 @@ jobs:
 
       - name: Create DMG
         run: |
-          cd /Users/runner/work/${{ github.event.repository.name }}/${{ github.event.repository.name }}/flutter/build/macos/Build/Products/Release
+          cd "$GITHUB_WORKSPACE/flutter/build/macos/Build/Products/Release"
           # Print directory contents for debugging
           echo "Directory contents:"
           ls -la
@@ -650,7 +646,7 @@ jobs:
           echo "Creating DMG for ${{ env.appname }}.app"
           DMG_STAGING_DIR="$(mktemp -d)"
           trap 'rm -rf "$DMG_STAGING_DIR"' EXIT
-          cp -R "${{ env.appname }}.app" "$DMG_STAGING_DIR/"
+          /usr/bin/ditto "${{ env.appname }}.app" "$DMG_STAGING_DIR/${{ env.appname }}.app"
           create-dmg \
             --volname "${{ env.appname }}" \
             --window-pos 200 120 \
