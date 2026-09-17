@@ -157,6 +157,11 @@ description = "Banned."
 one = "금지됨."
 other = "금지됨."
 
+[TooManyRequests]
+description = "Too many failed login attempts, please try again later."
+one = "로그인 실패가 너무 많아서 잠시 후 다시 시도해 주세요."
+other = "로그인 실패가 너무 많아서 잠시 후 다시 시도해 주세요."
+
 [RegisterSuccessWaitAdminConfirm]
 description = "Register success wait admin confirm."
 one = "가입 성공, 관리자 확인 대기 중."

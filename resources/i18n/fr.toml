@@ -163,6 +163,11 @@ description = "Banned."
 one = "Banni."
 other = "Banni."
 
+[TooManyRequests]
+description = "Too many failed login attempts, please try again later."
+one = "Trop de tentatives de connexion échouées, veuillez réessayer plus tard."
+other = "Trop de tentatives de connexion échouées, veuillez réessayer plus tard."
+
 [RegisterSuccessWaitAdminConfirm]
 description = "Register success wait admin confirm."
 one = "Inscription réussie, veuillez attendre la confirmation de l'administrateur."

@@ -11,9 +11,16 @@ import (
 	"net/http"
 )
 
+// maxAnonBodyBytes 匿名端点请求体大小上限（128 KiB）。
+// 正常客户端报文都很短（sysinfo 为若干短字段，audit 为短 JSON），
+// 超限即视为异常数据，在 JSON 解析前由 http.MaxBytesReader 强制拒绝，
+// 防止超大报文耗尽内存/CPU。
+const maxAnonBodyBytes = 128 * 1024
+
 func ApiInit(g *gin.Engine) {
 
-	//g.Use(middleware.Cors())
+	// 跨域中间件统一挂载在 http.ApiInit() 的全局中间件链上（所有路由注册之前），
+	// 这里不再重复挂载，保证管理端 / API 端跨域策略一致。
 	//swagger
 	if global.Config.App.ShowSwagger == 1 {
 		g.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.InstanceName("api")))
@@ -28,14 +35,15 @@ func ApiInit(g *gin.Engine) {
 		frg.GET("/", i.Index)
 		frg.GET("/version", i.Version)
 
-		frg.POST("/heartbeat", i.Heartbeat)
+		// 心跳同样属于匿名写入端点：限制请求体大小 + 控制器内做 (id, uuid) 身份校验
+		frg.POST("/heartbeat", middleware.BodyLimit(maxAnonBodyBytes), i.Heartbeat)
 	}
 
 	{
 		l := &api.Login{}
 		// 如果返回oidc则可以通过oidc登录
 		frg.GET("/login-options", l.LoginOptions)
-		frg.POST("/login", l.Login)
+		frg.POST("/login", middleware.BodyLimit(maxAnonBodyBytes), l.Login)
 
 	}
 
@@ -56,8 +64,8 @@ func ApiInit(g *gin.Engine) {
 	}
 	{
 		pe := &api.Peer{}
-		//提交系统信息
-		frg.POST("/sysinfo", pe.SysInfo)
+		//提交系统信息（限请求体大小，防止超大报文）
+		frg.POST("/sysinfo", middleware.BodyLimit(maxAnonBodyBytes), pe.SysInfo)
 		frg.POST("/sysinfo_ver", pe.SysInfoVer)
 	}
 
@@ -68,9 +76,9 @@ func ApiInit(g *gin.Engine) {
 	{
 		au := &api.Audit{}
 		//[method:POST] [uri:/api/audit/conn]
-		frg.POST("/audit/conn", au.AuditConn)
+		frg.POST("/audit/conn", middleware.BodyLimit(maxAnonBodyBytes), au.AuditConn)
 		//[method:POST] [uri:/api/audit/file]
-		frg.POST("/audit/file", au.AuditFile)
+		frg.POST("/audit/file", middleware.BodyLimit(maxAnonBodyBytes), au.AuditFile)
 	}
 
 	frg.Use(middleware.RustAuth())
@@ -138,7 +146,7 @@ func PersonalRoutes(frg *gin.RouterGroup) {
 func WebClientRoutes(frg *gin.RouterGroup) {
 	w := &api.WebClient{}
 	{
-		frg.POST("/shared-peer", w.SharedPeer)
+		frg.POST("/shared-peer", middleware.BodyLimit(maxAnonBodyBytes), w.SharedPeer)
 	}
 	{
 		frg.POST("/server-config", middleware.RustAuth(), w.ServerConfig)

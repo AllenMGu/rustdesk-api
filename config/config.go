@@ -23,6 +23,11 @@ type App struct {
 	DisablePwdLogin  bool          `mapstructure:"disable-pwd-login"`
 	CaptchaThreshold int           `mapstructure:"captcha-threshold"`
 	BanThreshold     int           `mapstructure:"ban-threshold"`
+	// AccountFailThreshold 同一 (IP, 用户名) 在限流窗口内登录失败达到该次数后临时阻断。
+	// 小于0表示禁用，0(缺省)使用默认值 10
+	AccountFailThreshold int           `mapstructure:"account-fail-threshold"`
+	// AccountBanDuration 账号级阻断的基础时长，连续触发时指数递增（上限60分钟）。为0使用默认值5m
+	AccountBanDuration time.Duration `mapstructure:"account-ban-duration"`
 }
 type Admin struct {
 	Title           string `mapstructure:"title"`

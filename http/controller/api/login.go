@@ -11,6 +11,8 @@ import (
 	"github.com/lejianwen/rustdesk-api/v2/model"
 	"github.com/lejianwen/rustdesk-api/v2/service"
 	"net/http"
+	"strconv"
+	"time"
 )
 
 type Login struct {
@@ -36,6 +38,13 @@ func (l *Login) Login(c *gin.Context) {
 	loginLimiter := global.LoginLimiter
 	clientIp := c.ClientIP()
 
+	// IP 级封禁检查（若配置启用）：直接以 429 拒绝
+	if banned, _ := loginLimiter.CheckSecurityStatus(clientIp); banned {
+		global.Logger.Warn(fmt.Sprintf("Login blocked (ip banned): ip=%s", clientIp))
+		l.tooMany(c, response.TranslateMsg(c, "Banned"), retryAfter(loginLimiter.BanUntil(clientIp)))
+		return
+	}
+
 	f := &api.LoginForm{}
 	err := c.ShouldBindJSON(f)
 	//fmt.Println(f)
@@ -54,19 +63,35 @@ func (l *Login) Login(c *gin.Context) {
 		return
 	}
 
+	// 账号级 (IP, 用户名) 临时阻断检查：桌面客户端不引入验证码，
+	// 用 429 + Retry-After 做短时退避
+	if blocked, blockedUntil := loginLimiter.CheckAccountBlock(clientIp, f.Username); blocked {
+		global.Logger.Warn(fmt.Sprintf("Login blocked (account throttle): user=%s ip=%s until=%s", f.Username, clientIp, blockedUntil.Format(time.RFC3339)))
+		l.tooMany(c, response.TranslateMsg(c, "TooManyRequests"), retryAfter(blockedUntil))
+		return
+	}
+
 	u := service.AllService.UserService.InfoByUsernamePassword(f.Username, f.Password)
 
 	if u.Id == 0 {
 		loginLimiter.RecordFailedAttempt(clientIp)
+		loginLimiter.RecordAccountFailure(clientIp, f.Username)
 		global.Logger.Warn(fmt.Sprintf("Login Fail: %s %s %s", "UsernameOrPasswordError", c.RemoteIP(), c.ClientIP()))
 		response.Error(c, response.TranslateMsg(c, "UsernameOrPasswordError"))
 		return
 	}
 
 	if !service.AllService.UserService.CheckUserEnable(u) {
+		// 禁用账号同样计入失败，防止爆破者借禁用账号持续探测
+		loginLimiter.RecordFailedAttempt(clientIp)
+		loginLimiter.RecordAccountFailure(clientIp, f.Username)
 		response.Error(c, response.TranslateMsg(c, "UserDisabled"))
 		return
 	}
+
+	//登录成功，清除该 IP 与该账号组合的失败记录
+	loginLimiter.RemoveAttempts(clientIp)
+	loginLimiter.ClearAccountFailures(clientIp, f.Username)
 
 	//根据refer判断是webclient还是app
 	ref := c.GetHeader("referer")
@@ -74,7 +99,7 @@ func (l *Login) Login(c *gin.Context) {
 		f.DeviceInfo.Type = model.LoginLogClientWeb
 	}
 
-	ut := service.AllService.UserService.Login(u, &model.LoginLog{
+	ut, err := service.AllService.UserService.Login(u, &model.LoginLog{
 		UserId:   u.Id,
 		Client:   f.DeviceInfo.Type,
 		DeviceId: f.Id,
@@ -83,12 +108,34 @@ func (l *Login) Login(c *gin.Context) {
 		Type:     model.LoginLogTypeAccount,
 		Platform: f.DeviceInfo.Os,
 	})
+	if err != nil {
+		// token 生成失败：登录失败关闭，不落 token/登录日志，返回通用错误
+		global.Logger.Errorf("login rejected: token generation failed: %v", err)
+		response.Error(c, response.TranslateMsg(c, "OperationFailed"))
+		return
+	}
 
 	c.JSON(http.StatusOK, apiResp.LoginRes{
 		AccessToken: ut.Token,
 		Type:        "access_token",
 		User:        *(&apiResp.UserPayload{}).FromUser(u),
 	})
+}
+
+// tooMany 返回 429 Too Many Requests 并携带 Retry-After
+func (l *Login) tooMany(c *gin.Context, message string, retryAfterSec int) {
+	if retryAfterSec > 0 {
+		c.Header("Retry-After", strconv.Itoa(retryAfterSec))
+	}
+	c.AbortWithStatusJSON(http.StatusTooManyRequests, response.ErrorResponse{Error: message})
+}
+
+func retryAfter(until time.Time) int {
+	sec := int(time.Until(until).Seconds()) + 1
+	if sec < 0 {
+		sec = 0
+	}
+	return sec
 }
 
 // LoginOptions

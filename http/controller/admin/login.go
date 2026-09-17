@@ -86,7 +86,7 @@ func (ct *Login) Login(c *gin.Context) {
 		return
 	}
 
-	ut := service.AllService.UserService.Login(u, &model.LoginLog{
+	ut, err := service.AllService.UserService.Login(u, &model.LoginLog{
 		UserId:   u.Id,
 		Client:   model.LoginLogClientWebAdmin,
 		Uuid:     "", //must be empty
@@ -94,6 +94,12 @@ func (ct *Login) Login(c *gin.Context) {
 		Type:     model.LoginLogTypeAccount,
 		Platform: f.Platform,
 	})
+	if err != nil {
+		// token 生成失败：登录失败关闭，不落 token/登录日志，返回通用错误
+		global.Logger.Errorf("admin login rejected: token generation failed: %v", err)
+		response.Fail(c, 101, response.TranslateMsg(c, "OperationFailed"))
+		return
+	}
 
 	// 登录成功，清除登录限制
 	loginLimiter.RemoveAttempts(clientIp)

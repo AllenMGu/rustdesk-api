@@ -288,3 +288,207 @@ func TestB64CaptchaFlow(t *testing.T) {
 		t.Error("验证成功后应该重置状态")
 	}
 }
+
+func TestAccountFailureBlocksAtThreshold(t *testing.T) {
+	policy := SecurityPolicy{
+		CaptchaThreshold:     -1,
+		BanThreshold:         0,
+		AttemptsWindow:       time.Hour,
+		AccountFailThreshold: 3,
+		AccountBanDuration:   time.Hour,
+	}
+	limiter := NewLoginLimiter(policy)
+	ip, user := "192.168.1.100", "alice"
+
+	// 阈值内失败：不阻断
+	limiter.RecordAccountFailure(ip, user)
+	limiter.RecordAccountFailure(ip, user)
+	if blocked, _ := limiter.CheckAccountBlock(ip, user); blocked {
+		t.Error("threshold not reached, should not be blocked")
+	}
+
+	// 达到阈值：阻断
+	limiter.RecordAccountFailure(ip, user)
+	blocked, until := limiter.CheckAccountBlock(ip, user)
+	if !blocked {
+		t.Fatal("threshold reached, should be blocked")
+	}
+	if until.Before(time.Now().Add(time.Hour - time.Minute)) {
+		t.Errorf("unexpected block duration until %v", until)
+	}
+
+	// 阻断期间重复失败不延长阻断
+	before := until
+	limiter.RecordAccountFailure(ip, user)
+	if blocked, after := limiter.CheckAccountBlock(ip, user); !blocked || after != before {
+		t.Error("block during an active block should not be extended")
+	}
+
+	// 其它 (IP, 用户名) 组合不受影响
+	if blocked, _ := limiter.CheckAccountBlock("192.168.1.100", "bob"); blocked {
+		t.Error("other user should not be blocked")
+	}
+	if blocked, _ := limiter.CheckAccountBlock("10.0.0.1", user); blocked {
+		t.Error("other ip should not be blocked")
+	}
+}
+
+func TestAccountFailureEscalatesUntilSuccess(t *testing.T) {
+	policy := SecurityPolicy{
+		CaptchaThreshold:     -1,
+		BanThreshold:         0,
+		AttemptsWindow:       time.Hour,
+		AccountFailThreshold: 2,
+		AccountBanDuration:   200 * time.Millisecond,
+	}
+	limiter := NewLoginLimiter(policy)
+	ip, user := "192.168.1.100", "alice"
+
+	// 第 1 次阻断：基础时长
+	for i := 0; i < 2; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	blocked, until1 := limiter.CheckAccountBlock(ip, user)
+	if !blocked {
+		t.Fatal("first block expected")
+	}
+	firstDur := until1.Sub(time.Now())
+	time.Sleep(300 * time.Millisecond)
+
+	// 第 2 次阻断：时长翻倍（指数退避）
+	for i := 0; i < 2; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	blocked, until2 := limiter.CheckAccountBlock(ip, user)
+	if !blocked {
+		t.Fatal("second block expected")
+	}
+	secondDur := until2.Sub(time.Now())
+	if secondDur <= firstDur {
+		t.Errorf("expected escalating ban duration, first=%v second=%v", firstDur, secondDur)
+	}
+
+	// 登录成功后计数与退避一并重置
+	limiter.ClearAccountFailures(ip, user)
+	time.Sleep(300 * time.Millisecond)
+	for i := 0; i < 2; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	blocked, until3 := limiter.CheckAccountBlock(ip, user)
+	if !blocked {
+		t.Fatal("block expected after re-reaching threshold")
+	}
+	if until3.After(time.Now().Add(300*time.Millisecond + 50*time.Millisecond)) {
+		t.Errorf("ban duration should reset to base after success, got %v", until3.Sub(time.Now()))
+	}
+}
+
+func TestAccountFailureDisabled(t *testing.T) {
+	policy := SecurityPolicy{
+		CaptchaThreshold:     -1,
+		BanThreshold:         0,
+		AccountFailThreshold: -1,
+	}
+	limiter := NewLoginLimiter(policy)
+	ip, user := "192.168.1.100", "alice"
+
+	for i := 0; i < 10; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	if blocked, _ := limiter.CheckAccountBlock(ip, user); blocked {
+		t.Error("account limiting disabled, should not be blocked")
+	}
+}
+
+func TestAccountFailureDefaultsEnabled(t *testing.T) {
+	// 缺省策略（0 值）下账号级保护应启用，保证默认配置有爆破防护
+	limiter := NewLoginLimiter(SecurityPolicy{})
+	ip, user := "192.168.1.100", "alice"
+
+	for i := 0; i < AccountBanDefaultThreshold; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	if blocked, _ := limiter.CheckAccountBlock(ip, user); !blocked {
+		t.Error("default policy should block after default threshold")
+	}
+}
+
+// TestAccountStreakSurvivesCleanup 审查 P2：阻断过期后后台清理不得把
+// streak（指数退避计数）一并丢弃，否则 5m→10m→20m→60m 永远停在基础时长。
+// 本测试精确复现该场景：第 1 次阻断 → 阻断过期 → cleanupExpired() →
+// 第 2 次阻断必须按 2 倍基础时长升级。
+func TestAccountStreakSurvivesCleanup(t *testing.T) {
+	policy := SecurityPolicy{
+		CaptchaThreshold:     -1,
+		BanThreshold:         0,
+		AttemptsWindow:       time.Hour,
+		AccountFailThreshold: 2,
+		AccountBanDuration:   150 * time.Millisecond,
+	}
+	limiter := NewLoginLimiter(policy)
+	ip, user := "192.168.1.200", "bob"
+
+	// 第 1 次阻断（基础时长），streak 变为 1
+	for i := 0; i < 2; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	if blocked, _ := limiter.CheckAccountBlock(ip, user); !blocked {
+		t.Fatal("first block expected")
+	}
+	time.Sleep(220 * time.Millisecond) // 阻断过期
+	limiter.cleanupExpired() // 旧实现在这里删除 accountState，连带丢弃 streak
+	limiter.mu.Lock()
+	st := limiter.accountStates[accountKey(ip, user)]
+	streak := 0
+	if st != nil {
+		streak = st.streak
+	}
+	limiter.mu.Unlock()
+	if streak != 1 {
+		t.Fatalf("streak must survive cleanup, got %d", streak)
+	}
+
+	// 第 2 次阻断：必须升级为 2 倍基础时长
+	for i := 0; i < 2; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	blocked, until := limiter.CheckAccountBlock(ip, user)
+	if !blocked {
+		t.Fatal("second block expected")
+	}
+	dur := until.Sub(time.Now())
+	if dur <= policy.AccountBanDuration+50*time.Millisecond {
+		t.Errorf("second ban should be escalated (streak preserved), got %v (base=%v)", dur, policy.AccountBanDuration)
+	}
+}
+
+// TestAccountStreakExpiresAfterTTL streak 超过 accountStateTTL 无任何活动后
+// 过期清除，防止 accountStates 无界累积
+func TestAccountStreakExpiresAfterTTL(t *testing.T) {
+	policy := SecurityPolicy{
+		CaptchaThreshold:     -1,
+		BanThreshold:         0,
+		AttemptsWindow:       time.Hour,
+		AccountFailThreshold: 2,
+		AccountBanDuration:   100 * time.Millisecond,
+	}
+	limiter := NewLoginLimiter(policy)
+	ip, user := "192.168.1.201", "carol"
+	for i := 0; i < 2; i++ {
+		limiter.RecordAccountFailure(ip, user)
+	}
+	time.Sleep(150 * time.Millisecond) // 阻断过期
+	key := accountKey(ip, user)
+	limiter.mu.Lock()
+	if st := limiter.accountStates[key]; st != nil {
+		st.lastActive = time.Now().Add(-accountStateTTL - time.Hour)
+	}
+	limiter.mu.Unlock()
+	limiter.cleanupExpired()
+	limiter.mu.Lock()
+	_, exists := limiter.accountStates[key]
+	limiter.mu.Unlock()
+	if exists {
+		t.Error("streak state should be removed after TTL of inactivity")
+	}
+}

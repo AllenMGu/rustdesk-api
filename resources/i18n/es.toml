@@ -163,6 +163,11 @@ description = "Banned."
 one = "Prohibido."
 other = "Prohibido."
 
+[TooManyRequests]
+description = "Too many failed login attempts, please try again later."
+one = "Demasiados intentos de inicio de sesión fallidos, inténtelo de nuevo más tarde."
+other = "Demasiados intentos de inicio de sesión fallidos, inténtelo de nuevo más tarde."
+
 [RegisterSuccessWaitAdminConfirm]
 description = "Register success, wait admin confirm."
 one = "Registro exitoso, espere la confirmación del administrador."

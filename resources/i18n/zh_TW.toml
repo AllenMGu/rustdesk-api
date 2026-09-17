@@ -163,6 +163,11 @@ description = "Banned."
 one = "已被禁用。"
 other = "已被禁用。"
 
+[TooManyRequests]
+description = "Too many failed login attempts, please try again later."
+one = "登入失敗次數過多，請稍後再試。"
+other = "登入失敗次數過多，請稍後再試。"
+
 [RegisterSuccessWaitAdminConfirm]
 description = "Register success, wait admin confirm."
 one = "註冊成功，等待管理員確認。"

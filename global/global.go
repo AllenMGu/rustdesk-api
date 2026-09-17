@@ -37,4 +37,6 @@ var (
 	Lock         lock.Locker
 	Localizer    func(lang string) *i18n.Localizer
 	LoginLimiter *utils.LoginLimiter
+	// RateLimiter 匿名遥测端点（sysinfo/audit）的按 IP 限流器
+	RateLimiter *utils.RateLimiter
 )
