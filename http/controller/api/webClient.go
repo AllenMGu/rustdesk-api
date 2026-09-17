@@ -123,9 +123,15 @@ func (i *WebClient) ServerConfig(c *gin.Context) {
 // @Router /shared-peer [post]
 func (i *WebClient) SharedPeer(c *gin.Context) {
 	j := &gin.H{}
-	c.ShouldBindJSON(j)
-	t := (*j)["share_token"].(string)
-	if t == "" {
+	// 修复：此前忽略绑定错误，且 share_token 直接无类型断言转换——
+	// 请求体为 {} 或 share_token 非字符串时 .(string) 直接 panic
+	//（Gin Recovery 拦截后返回 500，可被用于 500/日志型 DoS）
+	if err := c.ShouldBindJSON(j); err != nil {
+		response.Fail(c, 101, "invalid request body")
+		return
+	}
+	t, ok := (*j)["share_token"].(string)
+	if !ok || t == "" {
 		response.Fail(c, 101, "share_token is required")
 		return
 	}

@@ -31,10 +31,10 @@ const RESOURCES = {
   "icons/Icon-512.png": "363d0fbd6c49a37ee01b9afad0849d86",
   "icons/Icon-maskable-192.png": "5496a0a956a65451bb26d515a8365838",
   "icons/Icon-maskable-512.png": "7f03ce96eb8a827eb1a8dd06a5ebc638",
-  "index.html": "a824dd987f3326baa5153bcc2470c228",
+  "index.html": "d6c96550b4b482ff5656630a3c1dca1d",
   "js/dist/index.css": "325598511be4c5926c2e5bd308a3ea4c",
   "js/dist/index.html": "85716a9a0538b47b808045f6923bc8d8",
-  "js/dist/index.js": "fe2f6eb36c95fb4985c32d2f18a1529d",
+  "js/dist/index.js": "4e0ba34f9085f47555d6846d4c6efc30",
   "js/dist/vendor.js": "158a0d2d986f84d64c5e9a2171201bb6",
   "js/gen_js_from_hbb.py": "b6e1ca5f641d115bef1cad62ea610cba",
   "js/index.html": "2e82f245c8a1b4a297893becc211e8ba",
@@ -45,7 +45,7 @@ const RESOURCES = {
   "js/src/connection.ts": "88c4025338569a875f35b9fc7bc5fd5b",
   "js/src/gen_js_from_hbb.ts": "ffa7bd435d554799387002e6d8488529",
   "js/src/globals.js": "6c9a5a55c77fe5fab9edef491cbafc6b",
-  "js/src/ljw.js": "fc129025467480ba13c2a7571c27ed36",
+  "js/src/ljw.js": "5f075e3ad82d05fab0c8a108f8d93869",
   "js/src/main.ts": "b0f2bfbc183c87e47c5ed802a54fbfa6",
   "js/src/message.ts": "6afb0acdea65ab6a3933e4fac741bc14",
   "js/src/rendezvous.ts": "de71b8f1caff41ce241e4955fb8bfbbc",
@@ -121,7 +121,7 @@ const RESOURCES = {
   "yuv-canvas-1.2.6.js": "c4ace642c725cf918ed9440426b583b8",
   "yuv.js": "5cff03855bc9577b6104b9743ff26790",
   "yuv.wasm": "443e8cb7b56fff2550ce0a411f3a05eb",
-  "/": "a824dd987f3326baa5153bcc2470c228"
+  "/": "d6c96550b4b482ff5656630a3c1dca1d"
 };
 
 // The application shell files that are downloaded before a service worker can

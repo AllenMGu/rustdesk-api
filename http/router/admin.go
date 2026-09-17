@@ -72,7 +72,11 @@ func RdgenBind(adg *gin.RouterGroup) {
 
 func RustdeskCmdBind(adg *gin.RouterGroup) {
 	cont := &admin.Rustdesk{}
-	rg := adg.Group("/rustdesk")
+	// RustDesk server commands (relay config, IP blocker, bandwidth limits, ...)
+	// are server-level operations. Require administrator privilege in addition to
+	// the BackendUserAuth applied on the /api/admin group; a regular logged-in
+	// user must not be able to change server configuration.
+	rg := adg.Group("/rustdesk").Use(middleware.AdminPrivilege())
 	rg.POST("/sendCmd", cont.SendCmd)
 	rg.GET("/cmdList", cont.CmdList)
 	rg.POST("/cmdDelete", cont.CmdDelete)

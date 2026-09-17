@@ -1,6 +1,8 @@
 package service
 
 import (
+	"strings"
+
 	"github.com/lejianwen/rustdesk-api/v2/model"
 	"gorm.io/gorm"
 )
@@ -49,6 +51,56 @@ func (ps *PeerService) UuidBindUserId(deviceId string, uuid string, userId uint)
 			})
 		}*/
 	}
+}
+
+// VerifyDeviceIdentity 只读校验匿名端点（/api/sysinfo、/api/audit/*）上报的
+// 设备身份 (id, uuid)。官方 RustDesk 客户端上报这两个端点时不携带登录凭证，
+// 而 (id, uuid) 是同一台机器上稳定成对出现的标识，可作为弱设备身份使用。
+//
+// 注意：
+//   - 本方法绝不写库：校验路径上任何分支（包括旧 peer 尚未绑定 uuid 的情况）
+//     都不得产生绑定副作用，否则匿名审计端点可被用来抢占/改写既有 peer 的
+//     uuid，进而劫持其他端点的身份绑定。
+//   - uuid 大小写敏感：客户端上报的 uuid 是 encode64(uuid) 的 Base64 串，
+//     Base64 编码大小写敏感，必须精确匹配（不能 EqualFold）。
+//   - id/uuid 任一为空一律拒绝；未绑定 uuid 的旧 peer 也一律拒绝，
+//     其首次绑定只能发生在 /api/sysinfo 的 BindLegacyDeviceIdentity 路径。
+func (ps *PeerService) VerifyDeviceIdentity(id, uuid string) bool {
+	id = strings.TrimSpace(id)
+	uuid = strings.TrimSpace(uuid)
+	if id == "" || uuid == "" {
+		return false
+	}
+	pe := ps.FindById(id)
+	return pe.RowId != 0 && pe.Uuid != "" && pe.Uuid == uuid
+}
+
+// BindLegacyDeviceIdentity 为尚未绑定 uuid 的既有 peer 做一次性绑定，
+// 仅允许 /api/sysinfo（设备自报系统信息的端点）调用：
+// peer 行必须存在、Uuid 为空、上报的 uuid 非空，绑定后立即生效。
+// 已绑定 uuid 的 peer 一律拒绝改绑（uuid 是设备稳定标识，不允许被改写）。
+//
+// 并发安全：绑定用单条带条件的 UPDATE（CAS，compare-and-swap）完成，
+// 而不是"先查再改"——两个并发请求同时看到空 uuid 时，只有第一个的
+// UPDATE 命中行（RowsAffected==1），第二个因 uuid 已非空而命中 0 行失败，
+// 从而保证"一次性绑定"在竞态下依然成立。
+//
+// 按主键 row_id 做 CAS，而不是业务 id：旧库若存在同 id 多行
+// （唯一索引尚未建成），按 id 的 UPDATE 会一次改动多行，且
+// RowsAffected != 1 的"失败"返回时副作用已经发生；按 row_id 则
+// 永远至多命中一行，失败零副作用。
+func (ps *PeerService) BindLegacyDeviceIdentity(rowId uint, uuid string) bool {
+	uuid = strings.TrimSpace(uuid)
+	if rowId == 0 || uuid == "" {
+		return false
+	}
+	res := DB.Model(&model.Peer{}).
+		Where("row_id = ? AND (uuid = '' OR uuid IS NULL)", rowId).
+		Update("uuid", uuid)
+	if res.Error != nil {
+		return false
+	}
+	return res.RowsAffected == 1
 }
 
 // UuidUnbindUserId 解绑用户id, 用于用户注销

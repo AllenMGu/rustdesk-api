@@ -154,6 +154,11 @@ description = "Banned."
 one = "Banned."
 other = "Banned."
 
+[TooManyRequests]
+description = "Too many failed login attempts, please try again later."
+one = "Too many failed login attempts, please try again later."
+other = "Too many failed login attempts, please try again later."
+
 [RegisterSuccessWaitAdminConfirm]
 description = "Register success, wait admin confirm."
 one = "Register success, wait admin confirm."

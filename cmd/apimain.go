@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -23,7 +24,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const DatabaseVersion = 265
+// 266: AutoMigrate 应用 model.Peer.Id 的 uniqueIndex（idx_peers_id_unique）。
+// 既有部署在版本升级时自动执行 Migrate()，为 peers.id 创建唯一索引；
+// 索引必须真实建成（ensurePeersIdUniqueIndex 校验）才记录 266，
+// 失败（如存在重复 id 行）时版本保持 265、服务仍可启动（降级为先
+// 后到达），清理重复数据后下次启动自动重试，不会留下假迁移成功。
+const DatabaseVersion = 266
 
 // @title 管理系统API
 // @version 1.0
@@ -204,12 +210,17 @@ func InitGlobal() {
 	service.New(&global.Config, global.DB, global.Logger, global.Jwt, global.Lock)
 
 	global.LoginLimiter = utils.NewLoginLimiter(utils.SecurityPolicy{
-		CaptchaThreshold: global.Config.App.CaptchaThreshold,
-		BanThreshold:     global.Config.App.BanThreshold,
-		AttemptsWindow:   10 * time.Minute,
-		BanDuration:      30 * time.Minute,
+		CaptchaThreshold:     global.Config.App.CaptchaThreshold,
+		BanThreshold:         global.Config.App.BanThreshold,
+		AccountFailThreshold: global.Config.App.AccountFailThreshold,
+		AccountBanDuration:   global.Config.App.AccountBanDuration,
+		AttemptsWindow:       10 * time.Minute,
+		BanDuration:          30 * time.Minute,
 	})
 	global.LoginLimiter.RegisterProvider(utils.B64StringCaptchaProvider{})
+
+	// 匿名遥测端点（sysinfo/audit）限流器
+	global.RateLimiter = utils.NewRateLimiter()
 	DatabaseAutoUpdate()
 }
 
@@ -309,8 +320,19 @@ func Migrate(version uint) {
 	)
 	if err != nil {
 		global.Logger.Error("migrate err :=>", err)
+		return
 	}
-	global.DB.Create(&model.Version{Version: version})
+	// v266 守卫：peers.id 唯一索引必须真实建成才允许记录新版本号。
+	// 失败时版本保持旧值（如 265），下次启动自动重试迁移；
+	// 否则"建索引失败 → 却永久标记为 266"会造成假迁移成功，
+	// 管理员清理重复数据后重启也不会再建索引。
+	if version >= DatabaseVersion && !ensurePeersIdUniqueIndex() {
+		return
+	}
+	if err := global.DB.Create(&model.Version{Version: version}).Error; err != nil {
+		global.Logger.Error("save database version failed: ", err)
+		return
+	}
 	//如果是初次则创建一个默认用户
 	var vc int64
 	global.DB.Model(&model.Version{}).Count(&vc)
@@ -354,4 +376,53 @@ func Migrate(version uint) {
 		global.DB.Create(admin)
 	}
 
+}
+
+// ensurePeersIdUniqueIndex 校验 v266 迁移是否真实完成：
+//  1. peers.id 无重复行（重复行会阻止唯一索引创建）；
+//  2. 唯一索引 idx_peers_id_unique 真实存在且为唯一索引
+//     （AutoMigrate 对"同名索引已存在"会静默跳过，必须显式验证唯一性）。
+//
+// 任一检查失败返回 false：调用方不记录新版本号，服务可继续启动
+// （降级为先到先得 + 日志），下次启动自动重试迁移。
+func ensurePeersIdUniqueIndex() bool {
+	// 1) 重复 id 检查（标准 SQL，sqlite/mysql/postgresql 通用）
+	var dupGroups int64
+	if err := global.DB.Raw("SELECT COUNT(*) FROM (SELECT id FROM peers GROUP BY id HAVING COUNT(*) > 1)").Scan(&dupGroups).Error; err != nil {
+		global.Logger.Error("v266 guard: duplicate-id check failed: ", err)
+		return false
+	}
+	if dupGroups > 0 {
+		global.Logger.Errorf("v266 guard: peers.id 存在 %d 组重复行，唯一索引无法创建；请清理重复设备后重启（数据库版本保持旧值，下次启动自动重试）", dupGroups)
+		return false
+	}
+
+	// 2) 按方言验证唯一索引存在且唯一
+	var existsUnique bool
+	var checkErr error
+	switch global.Config.Gorm.Type {
+	case config.TypeMysql:
+		var n int64
+		checkErr = global.DB.Raw(
+			"SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'peers' AND index_name = 'idx_peers_id_unique' AND non_unique = 0",
+		).Scan(&n).Error
+		existsUnique = checkErr == nil && n > 0
+	case config.TypePostgresql:
+		var n int64
+		checkErr = global.DB.Raw(
+			"SELECT COUNT(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = 'idx_peers_id_unique' AND i.indisunique",
+		).Scan(&n).Error
+		existsUnique = checkErr == nil && n > 0
+	default: // sqlite
+		var sqlText string
+		checkErr = global.DB.Raw(
+			"SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'peers' AND name = 'idx_peers_id_unique'",
+		).Scan(&sqlText).Error
+		existsUnique = checkErr == nil && strings.Contains(strings.ToUpper(sqlText), "UNIQUE INDEX")
+	}
+	if !existsUnique {
+		global.Logger.Errorf("v266 guard: 唯一索引 idx_peers_id_unique 未就位（err=%v）；数据库版本保持旧值，下次启动自动重试", checkErr)
+		return false
+	}
+	return true
 }

@@ -163,6 +163,11 @@ description = "Banned."
 one = "Заблокировано."
 other = "Заблокировано."
 
+[TooManyRequests]
+description = "Too many failed login attempts, please try again later."
+one = "Слишком много неудачных попыток входа, повторите попытку позже."
+other = "Слишком много неудачных попыток входа, повторите попытку позже."
+
 [RegisterSuccessWaitAdminConfirm]
 description = "Register success wait admin confirm."
 one = "Регистрация прошла успешно, ожидайте подтверждения администратора."

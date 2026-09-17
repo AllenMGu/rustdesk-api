@@ -156,6 +156,11 @@ description = "Banned."
 one = "已被封禁。"
 other = "已被封禁。"
 
+[TooManyRequests]
+description = "Too many failed login attempts, please try again later."
+one = "登录失败次数过多，请稍后再试。"
+other = "登录失败次数过多，请稍后再试。"
+
 [RegisterSuccessWaitAdminConfirm]
 description = "Register success, wait for admin confirm."
 one = "注册成功，请等待管理员审核。"

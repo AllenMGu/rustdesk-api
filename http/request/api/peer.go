@@ -1,6 +1,49 @@
 package api
 
-import "github.com/lejianwen/rustdesk-api/v2/model"
+import (
+	"errors"
+	"fmt"
+
+	"github.com/lejianwen/rustdesk-api/v2/model"
+)
+
+// 匿名端点（/api/sysinfo、/api/audit/*）上报字段的长度上限：
+// 正常客户端上报内容都很短，超限值按异常数据处理，防止存储膨胀。
+const (
+	// PeerIdLimit peer id 长度上限。客户端 id 是 10 位数字；
+	// 超限视为异常数据，直接拒绝（不能截断：截断会改变查询键，
+	// 导致同一设备重复建 peer 或身份校验失配）
+	PeerIdLimit = 128
+	// PeerUuidLimit peer uuid 长度上限。客户端 uuid 是 22 位 Base64（encode64(get_uuid())）
+	PeerUuidLimit = 256
+	peerVerLimit   = 64
+	peerFieldLimit = 1024
+)
+
+// ValidatePeerIdentity 校验匿名端点上报的设备身份 (id, uuid) 的合法性：
+// id 必填且不超过 PeerIdLimit，uuid 不超过 PeerUuidLimit（是否允许为空由
+// 调用方按端点语义决定）。长度以 rune 计，避免多字节字符误判。
+func ValidatePeerIdentity(id, uuid string) error {
+	if id == "" {
+		return errors.New("id is required")
+	}
+	if len([]rune(id)) > PeerIdLimit {
+		return fmt.Errorf("id exceeds %d characters", PeerIdLimit)
+	}
+	if len([]rune(uuid)) > PeerUuidLimit {
+		return fmt.Errorf("uuid exceeds %d characters", PeerUuidLimit)
+	}
+	return nil
+}
+
+// limitUTF8 将字符串截断到不超过 limit 个 rune，避免在多字节字符中间截断
+func limitUTF8(s string, limit int) string {
+	r := []rune(s)
+	if len(r) <= limit {
+		return s
+	}
+	return string(r[:limit])
+}
 
 type AddressBookFormData struct {
 	Tags      []string             `json:"tags"`
@@ -23,16 +66,18 @@ type PeerForm struct {
 	Version  string `json:"version"`
 }
 
+// ToPeer 展示类字段超长时截断入库；id/uuid 是身份标识与查询键，
+// 由调用方先经 ValidatePeerIdentity 校验长度（超限拒绝），此处原样保留
 func (pf *PeerForm) ToPeer() *model.Peer {
 	return &model.Peer{
-		Cpu:      pf.Cpu,
-		Hostname: pf.Hostname,
+		Cpu:      limitUTF8(pf.Cpu, peerFieldLimit),
+		Hostname: limitUTF8(pf.Hostname, peerFieldLimit),
 		Id:       pf.Id,
-		Memory:   pf.Memory,
-		Os:       pf.Os,
-		Username: pf.Username,
+		Memory:   limitUTF8(pf.Memory, peerFieldLimit),
+		Os:       limitUTF8(pf.Os, peerFieldLimit),
+		Username: limitUTF8(pf.Username, peerFieldLimit),
 		Uuid:     pf.Uuid,
-		Version:  pf.Version,
+		Version:  limitUTF8(pf.Version, peerVerLimit),
 	}
 }
 

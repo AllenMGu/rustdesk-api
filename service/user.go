@@ -1,6 +1,8 @@
 package service
 
 import (
+	crand "crypto/rand"
+	"encoding/hex"
 	"errors"
 	"math/rand"
 	"strconv"
@@ -94,17 +96,43 @@ func (us *UserService) InfoByAccessToken(token string) (*model.User, *model.User
 	return u, ut
 }
 
-// GenerateToken 生成token
-func (us *UserService) GenerateToken(u *model.User) string {
+// GenerateToken 生成token。
+// 失败关闭：生成失败时返回 error，调用方必须拒绝登录；
+// 绝不返回空 token（空 token 行会污染 token 表，且“空 token 无法解析”
+// 只是事后失效，不是登录失败的正确语义）。
+func (us *UserService) GenerateToken(u *model.User) (string, error) {
 	if len(Jwt.Key) > 0 {
-		return Jwt.GenerateToken(u.Id)
+		token := Jwt.GenerateToken(u.Id)
+		if token == "" {
+			return "", errors.New("jwt token generation failed")
+		}
+		return token, nil
 	}
-	return utils.Md5(u.Username + time.Now().String())
+	// No JWT key configured: issue an opaque access token with 256 bits of
+	// entropy from a CSPRNG. Tokens must never be derived from user-controlled
+	// or time-based input (the previous MD5(username + time) fallback was
+	// predictable and not collision-resistant).
+	tokenBytes := make([]byte, 32)
+	if _, err := crand.Read(tokenBytes); err != nil {
+		// A CSPRNG failure indicates a broken system; refuse to issue a token
+		// instead of falling back to a predictable value.
+		Logger.Errorf("crypto/rand failed while generating access token: %v", err)
+		return "", err
+	}
+	return hex.EncodeToString(tokenBytes), nil
 }
 
-// Login 登录
-func (us *UserService) Login(u *model.User, llog *model.LoginLog) *model.UserToken {
-	token := us.GenerateToken(u)
+// Login 登录。fail-closed：
+//   - token 生成失败（CSPRNG/JWT 失败）→ 返回 error，不落任何库；
+//   - user_tokens 与 login_logs 在同一事务中写入，任一条失败则整体回滚，
+//     不会出现"有 token 无日志"或"日志指向 ut.Id=0"的半成品状态；
+//   - 设备绑定（UuidBindUserId）只在事务成功提交之后执行。
+// 所有失败路径都返回 error，由调用方以通用错误响应给客户端。
+func (us *UserService) Login(u *model.User, llog *model.LoginLog) (*model.UserToken, error) {
+	token, err := us.GenerateToken(u)
+	if err != nil {
+		return nil, err
+	}
 	ut := &model.UserToken{
 		UserId:     u.Id,
 		Token:      token,
@@ -112,13 +140,28 @@ func (us *UserService) Login(u *model.User, llog *model.LoginLog) *model.UserTok
 		DeviceId:   llog.DeviceId,
 		ExpiredAt:  us.UserTokenExpireTimestamp(),
 	}
-	DB.Create(ut)
-	llog.UserTokenId = ut.UserId
-	DB.Create(llog)
+	// Associate the login log with the concrete token/session row (ut.Id),
+	// not the owner (ut.UserId): a user may hold many tokens across devices.
+	// 注意：ut.Id 在 Create 成功前是 0，必须在事务内、Create 之后赋值并同事务落库，
+	// 否则 DB 异常时 login_logs.user_token_id 会残留 0。
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		if cErr := tx.Create(ut).Error; cErr != nil {
+			return cErr
+		}
+		llog.UserTokenId = ut.Id
+		if cErr := tx.Create(llog).Error; cErr != nil {
+			return cErr
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	// 事务提交成功后才做设备绑定，避免部分副作用
 	if llog.Uuid != "" {
 		AllService.PeerService.UuidBindUserId(llog.DeviceId, llog.Uuid, u.Id)
 	}
-	return ut
+	return ut, nil
 }
 
 // CurUser 获取当前用户

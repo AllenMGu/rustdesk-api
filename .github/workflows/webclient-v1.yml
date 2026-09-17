@@ -10,14 +10,23 @@ on:
       - 'resources/web/**'
       - 'http/router/**'
       - 'http/controller/web/**'
-      - 'http/controller/api/webClient.go'
-      - 'http/response/api/webClient.go'
-      - 'http/response/api/webClient_test.go'
+      - 'http/controller/api/**'
+      - 'http/middleware/**'
+      - 'http/response/**'
+      - 'http/request/**'
+      - 'service/**'
+      - 'utils/**'
+      - 'model/**'
+      - 'cmd/**'
+      - 'config/**'
+      - 'global/**'
+      - 'lib/**'
+      - 'go.mod'
+      - 'go.sum'
       - 'docker/full-s6-generator/web-overrides/**'
       - 'Dockerfile.dev'
       - 'Dockerfile_full_s6_generator'
       - 'conf/config.yaml'
-      - 'config/rustdesk.go'
       - 'docs/**'
       - '.github/workflows/webclient-v1.yml'
   push:
@@ -30,14 +39,23 @@ on:
       - 'resources/web/**'
       - 'http/router/**'
       - 'http/controller/web/**'
-      - 'http/controller/api/webClient.go'
-      - 'http/response/api/webClient.go'
-      - 'http/response/api/webClient_test.go'
+      - 'http/controller/api/**'
+      - 'http/middleware/**'
+      - 'http/response/**'
+      - 'http/request/**'
+      - 'service/**'
+      - 'utils/**'
+      - 'model/**'
+      - 'cmd/**'
+      - 'config/**'
+      - 'global/**'
+      - 'lib/**'
+      - 'go.mod'
+      - 'go.sum'
       - 'docker/full-s6-generator/web-overrides/**'
       - 'Dockerfile.dev'
       - 'Dockerfile_full_s6_generator'
       - 'conf/config.yaml'
-      - 'config/rustdesk.go'
       - 'docs/**'
       - '.github/workflows/webclient-v1.yml'
 
@@ -58,8 +76,19 @@ jobs:
           go-version: '1.23.10'
           cache: false
 
-      - name: Test Web Client API payloads
-        run: go test -mod=mod ./http/response/api ./http/controller/api
+      - name: Test Web Client API payloads and security suite
+        # 覆盖本 PR 全部安全单测：http 包（trusted proxy）、middleware
+        #（cors/body_limit/admin_privilege）、controller/api（sysinfo/audit/
+        # heartbeat/shared-peer 安全用例）、controller/admin、router、service
+        #（peer 身份/登录事务）、utils（限流/退避）、config、
+        # cmd（Migrate v266 失败语义守卫测试；同时确保 apimain 始终可编译）
+        # 不用 ./... ：lib/cache 的 Redis 测试依赖外部服务器（硬编码内网地址）
+        run: go test -mod=mod ./http/... ./service ./utils ./config ./cmd/...
+
+      - name: Vet security packages
+        # vet 与测试同范围，保证 apimain（含 DatabaseVersion/Migrate 守卫）
+        # 的静态检查随安全包一起执行
+        run: go vet -mod=mod ./http/... ./service ./utils ./config ./cmd/...
 
       - name: Verify fixed upstream tree and AGPL license
         run: ./webclient-v1/verify-source.sh
