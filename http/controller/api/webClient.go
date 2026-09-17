@@ -16,6 +16,18 @@ import (
 type WebClient struct {
 }
 
+const (
+	// sharedPeerRateLimitPerIP 每 IP 每分钟允许的 shared-peer 查询次数。
+	// /api/shared-peer 是匿名端点：合法 share_token 会直接进入 DB 查询，
+	// 无限流时匿名来源可用随机 token 持续打 DB（存储/查询型 DoS）。
+	// 合法场景是 web 客户端按分享链接查询，每 IP 每分钟 60 次已极宽裕。
+	sharedPeerRateLimitPerIP = 60
+	// shareTokenMaxLen share_token 最大长度。实际格式为 UUID（36 字符，
+	// ShareByWebClient 生成），128 留足余量；超长 token 直接拒绝，
+	// 不再进入 DB 查询（防超长参数探测/查询放大）。
+	shareTokenMaxLen = 128
+)
+
 // ServerConfig 服务配置
 // @Tags WEBCLIENT
 // @Summary 服务配置
@@ -122,6 +134,12 @@ func (i *WebClient) ServerConfig(c *gin.Context) {
 // @Failure 500 {object} response.Response
 // @Router /shared-peer [post]
 func (i *WebClient) SharedPeer(c *gin.Context) {
+	// IP 级前置限流：位于任何 JSON 解码之前（与 audit/heartbeat/sysinfo 一致）——
+	// 合法 share_token 会直接触发 DB 查询，匿名随机 token 洪水必须被配额拦下
+	if !global.RateLimiter.Allow("shared-peer:"+c.ClientIP(), sharedPeerRateLimitPerIP, time.Minute) {
+		response.Fail(c, 101, "too many requests")
+		return
+	}
 	j := &gin.H{}
 	// 修复：此前忽略绑定错误，且 share_token 直接无类型断言转换——
 	// 请求体为 {} 或 share_token 非字符串时 .(string) 直接 panic
@@ -133,6 +151,11 @@ func (i *WebClient) SharedPeer(c *gin.Context) {
 	t, ok := (*j)["share_token"].(string)
 	if !ok || t == "" {
 		response.Fail(c, 101, "share_token is required")
+		return
+	}
+	// 长度上限：实际 token 为 UUID（36 字符），超长直接拒绝、不进入 DB 查询
+	if len(t) > shareTokenMaxLen {
+		response.Fail(c, 101, "invalid share_token")
 		return
 	}
 	sr := service.AllService.AddressBookService.SharedPeer(t)

@@ -61,17 +61,17 @@ func (i *Index) Index(c *gin.Context) {
 // @Failure 500 {object} response.Response
 // @Router /heartbeat [post]
 func (i *Index) Heartbeat(c *gin.Context) {
+	// IP 级前置限流（纯内存）：必须位于任何 JSON 解码、DB 查询与日志之前。
+	// 身份校验是 DB 查询、拒绝路径会写 WARN 日志；若限流在 ShouldBindJSON
+	// 之后，攻击者用 <128KB 的畸形 body 洪水即可完全绕过限流（日志型 DoS）
+	if !global.RateLimiter.Allow("heartbeat-ip:"+c.ClientIP(), heartbeatRateLimitPerIP, time.Minute) {
+		c.JSON(http.StatusOK, gin.H{})
+		return
+	}
 	info := &requstform.PeerInfoInHeartbeat{}
 	err := c.ShouldBindJSON(info)
 	if err != nil {
 		// 与既有客户端契约一致：心跳端点所有路径均静默 200，不泄露解析细节
-		c.JSON(http.StatusOK, gin.H{})
-		return
-	}
-	// IP 级前置限流（纯内存，先于任何 DB 查询与日志）：
-	// 身份校验是 DB 查询、拒绝路径会写 WARN 日志，若限流在其之后，
-	// 匿名伪造者可用随机 (id, uuid) 无限次触发 DB 查询 + 日志洪泛
-	if !global.RateLimiter.Allow("heartbeat-ip:"+c.ClientIP(), heartbeatRateLimitPerIP, time.Minute) {
 		c.JSON(http.StatusOK, gin.H{})
 		return
 	}

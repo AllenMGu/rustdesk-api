@@ -37,6 +37,15 @@ const (
 // @Failure 500 {object} response.ErrorResponse
 // @Router /sysinfo [post]
 func (p *Peer) SysInfo(c *gin.Context) {
+	clientIp := c.ClientIP()
+	// IP 级前置限流：必须位于任何 JSON 解码之前——限流在 bind 之后时，
+	// 攻击者持续发送 <128KB 的非法 JSON 即可完全绕过 30/min 配额；
+	// 前置后畸形报文同样消耗配额
+	if !global.RateLimiter.Allow("sysinfo:"+clientIp, sysInfoRateLimit, time.Minute) {
+		c.Header("Retry-After", "60")
+		response.Error(c, response.TranslateMsg(c, "TooManyRequests"))
+		return
+	}
 	f := &requstform.PeerForm{}
 	err := c.ShouldBindBodyWith(f, binding.JSON)
 	if err != nil {
@@ -49,14 +58,6 @@ func (p *Peer) SysInfo(c *gin.Context) {
 	f.Uuid = strings.TrimSpace(f.Uuid)
 	if verr := requstform.ValidatePeerIdentity(f.Id, f.Uuid); verr != nil {
 		response.Error(c, response.TranslateMsg(c, "ParamsError")+" "+verr.Error())
-		return
-	}
-
-	clientIp := c.ClientIP()
-	// 匿名端点限流：限制单 IP 的提交频率，防止伪造记录造成存储膨胀
-	if !global.RateLimiter.Allow("sysinfo:"+clientIp, sysInfoRateLimit, time.Minute) {
-		c.Header("Retry-After", "60")
-		response.Error(c, response.TranslateMsg(c, "TooManyRequests"))
 		return
 	}
 
